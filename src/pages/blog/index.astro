@@ -1,0 +1,13 @@
+---
+/**
+ * The blog's list lives at `/archive` now. Old links (`/blog`, `/blog?search=`)
+ * keep working: a permanent redirect, with the search carried over.
+ */
+const search = (Astro.url.searchParams.get('search') ?? '').trim().slice(0, 100);
+const page = Number(Astro.url.searchParams.get('page')) || 0;
+const params = new URLSearchParams();
+if (search) params.set('q', search);
+if (page > 1) params.set('page', String(page));
+const qs = params.toString();
+return Astro.redirect(qs ? `/archive?${qs}` : '/archive', 301);
+---

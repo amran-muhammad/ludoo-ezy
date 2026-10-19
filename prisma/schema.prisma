@@ -1,0 +1,111 @@
+// The Site Database's schema (Prisma ORM 7). Change it, then run
+// `npx prisma migrate dev --name <what-changed>` against the Preview Database
+// and wrap the new migration.sql in BEGIN; … COMMIT; (see AGENTS.md).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  // The client runs in the Cloudflare Workers runtime, never in Node.
+  runtime  = "workerd"
+}
+
+// The connection string is NOT here: prisma.config.ts reads DATABASE_URL from
+// the environment, which the platform sets (the Build never gets one).
+datasource db {
+  provider = "postgresql"
+}
+
+/// The v0.1 starter's example table, no longer used by any screen. Kept because
+/// dropping a table needs a migration and the owner's approval.
+model Note {
+  id        Int      @id @default(autoincrement())
+  /// Shown as written. Never store a member's email address here.
+  body      String   @db.VarChar(500)
+  author    String?  @db.VarChar(80)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("notes")
+}
+
+/// A job on the job board (`/jobs`, `/jobs/<slug>`). Site admins
+/// (`community:site:update`) post and edit them from `/portal/jobs`.
+model Job {
+  id          Int      @id @default(autoincrement())
+  /// URL name, unique: `/jobs/<slug>`.
+  slug        String   @unique @db.VarChar(120)
+  title       String   @db.VarChar(120)
+  company     String   @db.VarChar(80)
+  location    String   @db.VarChar(80)
+  /// `full-time`, `part-time`, `contract` or `internship`.
+  type        String   @default("full-time") @db.VarChar(20)
+  remote      Boolean  @default(false)
+  /// Plain text; paragraphs separated by blank lines.
+  description String   @db.VarChar(10000)
+  /// Where to apply: an https URL or a mailto: link the poster chose to publish.
+  applyUrl    String   @map("apply_url") @db.VarChar(500)
+  /// `open` (listed) or `closed` (kept, not listed).
+  status      String   @default("open") @db.VarChar(10)
+  /// The admin's community profile that posted it.
+  createdBy   Int      @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([status, id])
+  @@map("jobs")
+}
+
+/// A file a signed-in member uploaded from `/portal/uploads`. The bytes live
+/// on the community's CDN (presign → PUT → register); this row keeps the
+/// public URL the platform returned.
+model Upload {
+  id           Int      @id @default(autoincrement())
+  /// The uploader's community profile (`/api/auth/me` → `profile.id`).
+  profileId    Int      @map("profile_id")
+  url          String   @db.VarChar(1000)
+  originalName String   @map("original_name") @db.VarChar(100)
+  fileType     String   @map("file_type") @db.VarChar(20)
+  fileSize     Int      @map("file_size")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([profileId, id])
+  @@map("uploads")
+}
+
+/// A newsletter subscriber, from the sign-up boxes on the website. The owner
+/// asked for these emails: they are how the newsletter reaches readers. Shown
+/// only to site admins (`community:site:update`) in `/portal/subscribers`.
+model Subscriber {
+  id        Int      @id @default(autoincrement())
+  /// Lower-cased and trimmed; one row per address.
+  email     String   @unique @db.VarChar(254)
+  /// Optional first name, for the greeting line of the email.
+  firstName String?  @map("first_name") @db.VarChar(60)
+  /// `free` or `paid` (the tier they were interested in when signing up).
+  tier      String   @default("free") @db.VarChar(10)
+  /// Which sign-up box: `home`, `subscribe`, `post`, `footer`…
+  source    String   @default("home") @db.VarChar(30)
+  /// `active` or `unsubscribed`.
+  status    String   @default("active") @db.VarChar(15)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status, id])
+  @@map("subscribers")
+}
+
+/// A message from the contact form (`/contact`). Read by site admins in
+/// `/portal/messages`; the sender's email is there so the owner can reply.
+model ContactMessage {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(80)
+  email     String   @db.VarChar(254)
+  /// `general`, `sponsorship`, `tip` or `press`.
+  topic     String   @default("general") @db.VarChar(20)
+  body      String   @db.VarChar(4000)
+  /// `new` or `read`.
+  status    String   @default("new") @db.VarChar(10)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("contact_messages")
+}

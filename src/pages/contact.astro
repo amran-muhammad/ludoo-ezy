@@ -1,0 +1,43 @@
+---
+/**
+ * Contact: the form (`POST /site-api/contact`, read by the owner in
+ * `/portal/messages`) and what to write about. Static: built once, served as a file.
+ */
+import ContactForm from '../components/site/ContactForm';
+import {CONTACT, NEWSLETTER} from '../content/site';
+import Base from '../layouts/Base.astro';
+import {staticContext} from '../server/page';
+
+export const prerender = true;
+
+const {site, viewer} = await staticContext(Astro.request);
+---
+
+<Base site={site} viewer={viewer} isStatic title="Contact" description={`Write to ${NEWSLETTER.name}: questions, product tips, sponsorship.`}>
+  <div class="mx-auto max-w-6xl px-4 pt-12 sm:px-6 sm:pt-16">
+    <header class="flex max-w-3xl flex-col gap-5 border-b border-foreground pb-10">
+      <p class="text-[0.625rem] font-semibold tracking-[0.2em] text-muted-foreground uppercase">Contact</p>
+      <h1 class="text-4xl leading-[1.05] font-semibold tracking-tight sm:text-6xl">{CONTACT.title}</h1>
+      <p class="text-lg text-muted-foreground">{CONTACT.lede}</p>
+    </header>
+
+    <div class="grid gap-14 pt-12 lg:grid-cols-[1.4fr_1fr] lg:gap-20">
+      <section aria-label="Send a message">
+        <ContactForm client:load />
+      </section>
+      <aside class="flex flex-col">
+        {
+          CONTACT.notes.map(note => (
+            <div class="flex flex-col gap-2 border-t py-6 last:border-b">
+              <h2 class="text-xl font-semibold">{note.title}</h2>
+              <p class="leading-relaxed text-muted-foreground">{note.body}</p>
+            </div>
+          ))
+        }
+        <p class="pt-6 text-sm text-muted-foreground">
+          Just want the newsletter? <a href="/subscribe" class="underline underline-offset-4 hover:text-foreground">Subscribe here</a>.
+        </p>
+      </aside>
+    </div>
+  </div>
+</Base>

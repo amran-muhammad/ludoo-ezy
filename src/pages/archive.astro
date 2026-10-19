@@ -1,0 +1,188 @@
+---
+/**
+ * The Archive: every post, newest first, with search and topics. Rendered on
+ * the server from the Site API in-process (`GET /site-api/posts`,
+ * `GET /site-api/posts/topics`). Search, topic and page are plain query
+ * strings (`/archive?topic=12&q=agents&page=2`): every result is a real,
+ * shareable, crawlable URL.
+ */
+import PostRow from '../components/PostRow.astro';
+import SubscribeForm from '../components/site/SubscribeForm';
+import {Button} from '../components/ui/button';
+import {Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle} from '../components/ui/empty';
+import {Input} from '../components/ui/input';
+import {NEWSLETTER, SIGNUP_NOTE} from '../content/site';
+import Base from '../layouts/Base.astro';
+import type {PostsPage, PostSummary, PostTerm} from '../lib/types';
+import {read} from '../server/backend';
+import {pageContext} from '../server/page';
+
+const PER_PAGE = 20;
+const params = Astro.url.searchParams;
+const page = Math.max(1, Math.min(500, Number(params.get('page')) || 1));
+const q = (params.get('q') ?? '').trim().slice(0, 100);
+const topicId = Number(params.get('topic')) || 0;
+
+const {api, site, viewer} = await pageContext(Astro.request, Astro.response);
+const [result, topicsAnswer] = await Promise.all([
+  read<PostsPage>(
+    api.posts.$get({
+      query: {page: String(page), perPage: String(PER_PAGE), search: q, category: topicId ? String(topicId) : undefined},
+    })
+  ),
+  read<{topics: PostTerm[]}>(api.posts.topics.$get()),
+]);
+const posts = result?.posts ?? [];
+const topics = topicsAnswer?.topics ?? [];
+const topic = topics.find(item => item.id === topicId) ?? null;
+const filtered = Boolean(q || topicId);
+
+const href = (next: {page?: number; topic?: number | null; q?: string}) => {
+  const out = new URLSearchParams();
+  const nq = next.q ?? q;
+  const nt = next.topic === undefined ? topicId : next.topic;
+  if (nq) out.set('q', nq);
+  if (nt) out.set('topic', String(nt));
+  if (next.page && next.page > 1) out.set('page', String(next.page));
+  const qs = out.toString();
+  return qs ? `/archive?${qs}` : '/archive';
+};
+
+/** Posts grouped by "October 2026", in the order they come (newest first). */
+const monthOf = (post: PostSummary) =>
+  post.publishedAt
+    ? new Intl.DateTimeFormat('en-GB', {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(post.publishedAt))
+    : 'Undated';
+const groups: {month: string; posts: PostSummary[]}[] = [];
+for (const post of posts) {
+  const month = monthOf(post);
+  const last = groups.at(-1);
+  if (last?.month === month) last.posts.push(post);
+  else groups.push({month, posts: [post]});
+}
+
+const heading = topic ? topic.name : 'The archive';
+const pill =
+  'inline-flex h-8 items-center border px-3 text-[0.65rem] font-semibold tracking-widest uppercase transition-colors';
+---
+
+<Base
+  site={site}
+  viewer={viewer}
+  title={topic ? `${topic.name} · Archive` : 'Archive'}
+  description={`Every issue of ${NEWSLETTER.name}, newest first. Search by topic or keyword.`}>
+  <div class="mx-auto max-w-6xl px-4 pt-12 sm:px-6 sm:pt-16">
+    <header class="flex flex-col gap-4 border-b border-foreground pb-8">
+      <p class="text-[0.625rem] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
+        {topic ? 'Topic' : `Every issue of ${NEWSLETTER.name}`}
+      </p>
+      <h1 class="text-4xl font-semibold tracking-tight sm:text-6xl">{heading}</h1>
+      <p class="max-w-2xl text-lg text-muted-foreground">
+        Every post, newest first. Search for a product or a phrase, or pick a topic.
+      </p>
+    </header>
+
+    <div class="grid gap-12 pt-8 lg:grid-cols-[1fr_18rem]">
+      <div class="min-w-0">
+        <form action="/archive" method="get" role="search" novalidate class="flex flex-col gap-2">
+          <label for="archive-q" class="text-xs font-semibold tracking-widest uppercase">Search the archive</label>
+          <div class="flex items-end gap-3">
+            <Input id="archive-q" type="search" name="q" value={q} placeholder="e.g. note-taking apps" maxLength={100} className="flex-1" />
+            {topicId > 0 && <input type="hidden" name="topic" value={String(topicId)} />}
+            <Button type="submit" variant="outline">Search</Button>
+          </div>
+        </form>
+
+        {
+          topics.length > 0 && (
+            <nav aria-label="Topics" class="mt-6 flex flex-wrap gap-2">
+              <a
+                href={href({topic: null, page: 1})}
+                aria-current={!topicId ? 'page' : undefined}
+                class:list={[pill, !topicId ? 'border-foreground bg-foreground text-background' : 'text-muted-foreground hover:border-foreground hover:text-foreground']}>
+                All topics
+              </a>
+              {topics.map(item => (
+                <a
+                  href={href({topic: item.id, page: 1})}
+                  aria-current={item.id === topicId ? 'page' : undefined}
+                  class:list={[pill, item.id === topicId ? 'border-foreground bg-foreground text-background' : 'text-muted-foreground hover:border-foreground hover:text-foreground']}>
+                  {item.name}
+                </a>
+              ))}
+            </nav>
+          )
+        }
+
+        {
+          filtered && (
+            <p class="mt-6 text-sm text-muted-foreground" aria-live="polite">
+              {posts.length === 0 ? 'No posts match' : `Showing ${posts.length}${result?.hasMore ? '+' : ''} posts`}
+              {q && <> for “<strong class="text-foreground">{q}</strong>”</>}
+              {topic && <> in <strong class="text-foreground">{topic.name}</strong></>}
+              {' · '}
+              <a href="/archive" class="underline underline-offset-4 hover:text-foreground">Clear</a>
+            </p>
+          )
+        }
+
+        {
+          groups.map(group => (
+            <section class="mt-10" aria-label={group.month}>
+              <h2 class="text-[0.625rem] font-semibold tracking-[0.2em] text-muted-foreground uppercase font-sans">{group.month}</h2>
+              <div>{group.posts.map(post => <PostRow post={post} heading="h3" />)}</div>
+            </section>
+          ))
+        }
+
+        {
+          posts.length === 0 && (
+            <Empty className="mt-10 border">
+              <EmptyHeader>
+                <EmptyTitle>{filtered ? 'Nothing matches that search' : 'The first issue is on its way'}</EmptyTitle>
+                <EmptyDescription>
+                  {filtered
+                    ? 'Try a shorter word, a product name, or another topic.'
+                    : 'Subscribe and it arrives in your inbox on Sunday, before it lands here.'}
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                {filtered ? (
+                  <Button asChild variant="outline">
+                    <a href="/archive">Show every post</a>
+                  </Button>
+                ) : (
+                  <Button asChild>
+                    <a href="/subscribe">Subscribe</a>
+                  </Button>
+                )}
+              </EmptyContent>
+            </Empty>
+          )
+        }
+
+        {
+          (page > 1 || result?.hasMore) && (
+            <nav aria-label="Pages" class="mt-10 flex items-center justify-between gap-4">
+              {page > 1 ? (
+                <Button asChild variant="outline"><a href={href({page: page - 1})} rel="prev">← Newer</a></Button>
+              ) : <span />}
+              <span class="text-xs tracking-widest text-muted-foreground uppercase">Page {page}</span>
+              {result?.hasMore ? (
+                <Button asChild variant="outline"><a href={href({page: page + 1})} rel="next">Older →</a></Button>
+              ) : <span />}
+            </nav>
+          )
+        }
+      </div>
+
+      <aside class="lg:sticky lg:top-24 lg:self-start">
+        <div class="flex flex-col gap-4 border p-6">
+          <h2 class="text-xl font-semibold">Get the next one</h2>
+          <p class="text-sm text-muted-foreground">New issues arrive in your inbox before they appear here.</p>
+          <SubscribeForm client:visible source="archive" note={SIGNUP_NOTE} />
+        </div>
+      </aside>
+    </div>
+  </div>
+</Base>
