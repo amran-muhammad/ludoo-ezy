@@ -69,7 +69,7 @@ export const ludoRoutes = new Hono()
     const color: Color = 'red';
     const code = randomCode();
     const state = makeInitialState([{color, name, isBot: false, playerId}]);
-    await (db as any).ludoRoom.create({
+    await db.ludoRoom.create({
       data: {code, state: JSON.stringify(state), status: 'waiting'},
     });
     return c.json({code, color}, 201);
@@ -78,7 +78,7 @@ export const ludoRoutes = new Hono()
   // GET /site-api/ludo/rooms/:code — poll state.
   .get('/rooms/:code', withDb, async c => {
     const db = c.var.db!;
-    const room = await (db as any).ludoRoom.findUnique({where: {code: c.req.param('code')}});
+    const room = await db.ludoRoom.findUnique({where: {code: c.req.param('code')}});
     if (!room) return c.json({error: 'not_found', message: 'Room not found.'}, 404);
     let state: GameState = JSON.parse(room.state);
     if (state.status === 'playing') {
@@ -92,7 +92,7 @@ export const ludoRoutes = new Hono()
     const db = c.var.db!;
     const code = c.req.param('code');
     const {name, playerId} = c.req.valid('json');
-    const room = await (db as any).ludoRoom.findUnique({where: {code}});
+    const room = await db.ludoRoom.findUnique({where: {code}});
     if (!room) return c.json({error: 'not_found', message: 'Room not found.'}, 404);
     const state: GameState = JSON.parse(room.state);
     if (state.status !== 'waiting') return c.json({error: 'already_started', message: 'Game already started.'}, 409);
@@ -103,7 +103,7 @@ export const ludoRoutes = new Hono()
     const color = COLORS.find(col => !used.has(col))!;
     state.players.push({color, name, isBot: false, playerId, tokens: [{id:0,pos:-1},{id:1,pos:-1},{id:2,pos:-1},{id:3,pos:-1}], rank: null});
     state.updatedAt = new Date().toISOString();
-    await (db as any).ludoRoom.update({where: {code}, data: {state: JSON.stringify(state)}});
+    await db.ludoRoom.update({where: {code}, data: {state: JSON.stringify(state)}});
     return c.json({code, color});
   })
 
@@ -112,14 +112,14 @@ export const ludoRoutes = new Hono()
     const db = c.var.db!;
     const code = c.req.param('code');
     const {playerId} = c.req.valid('json');
-    const room = await (db as any).ludoRoom.findUnique({where: {code}});
+    const room = await db.ludoRoom.findUnique({where: {code}});
     if (!room) return c.json({error: 'not_found', message: 'Room not found.'}, 404);
     let state: GameState = JSON.parse(room.state);
     if (state.status !== 'waiting') return c.json({error: 'already_started', message: 'Already started.'}, 409);
     if (!state.players.some(p => p.playerId === playerId)) return c.json({error: 'not_in_room', message: 'Not in this room.'}, 403);
     state = fillWithBots(state);
     state = startGame(state);
-    await (db as any).ludoRoom.update({where: {code}, data: {state: JSON.stringify(state), status: 'playing'}});
+    await db.ludoRoom.update({where: {code}, data: {state: JSON.stringify(state), status: 'playing'}});
     return c.json({ok: true});
   })
 
@@ -128,7 +128,7 @@ export const ludoRoutes = new Hono()
     const db = c.var.db!;
     const code = c.req.param('code');
     const {playerId} = c.req.valid('json');
-    const room = await (db as any).ludoRoom.findUnique({where: {code}});
+    const room = await db.ludoRoom.findUnique({where: {code}});
     if (!room) return c.json({error: 'not_found', message: 'Room not found.'}, 404);
     let state: GameState = JSON.parse(room.state);
     if (state.status !== 'playing') return c.json({error: 'not_playing'}, 409);
@@ -142,7 +142,7 @@ export const ludoRoutes = new Hono()
     }
     state = await playBotTurns(state, db, code);
     const newStatus = state.status === 'finished' ? 'finished' : 'playing';
-    await (db as any).ludoRoom.update({where: {code}, data: {state: JSON.stringify(state), status: newStatus}});
+    await db.ludoRoom.update({where: {code}, data: {state: JSON.stringify(state), status: newStatus}});
     return c.json({state});
   })
 
@@ -151,7 +151,7 @@ export const ludoRoutes = new Hono()
     const db = c.var.db!;
     const code = c.req.param('code');
     const {playerId, tokenId} = c.req.valid('json');
-    const room = await (db as any).ludoRoom.findUnique({where: {code}});
+    const room = await db.ludoRoom.findUnique({where: {code}});
     if (!room) return c.json({error: 'not_found', message: 'Room not found.'}, 404);
     let state: GameState = JSON.parse(room.state);
     if (state.status !== 'playing') return c.json({error: 'not_playing'}, 409);
@@ -163,7 +163,7 @@ export const ludoRoutes = new Hono()
     state = applyMove(state, tokenId);
     state = await playBotTurns(state, db, code);
     const newStatus = state.status === 'finished' ? 'finished' : 'playing';
-    await (db as any).ludoRoom.update({where: {code}, data: {state: JSON.stringify(state), status: newStatus}});
+    await db.ludoRoom.update({where: {code}, data: {state: JSON.stringify(state), status: newStatus}});
     return c.json({state});
   });
 
