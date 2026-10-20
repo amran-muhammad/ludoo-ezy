@@ -94,13 +94,18 @@ export const ludoRoutes = new Hono()
     const {name, playerId} = c.req.valid('json');
     const room = await db.ludoRoom.findUnique({where: {code}});
     if (!room) return c.json({error: 'not_found', message: 'Room not found.'}, 404);
-    const state: GameState = JSON.parse(room.state);
-    if (state.status !== 'waiting') return c.json({error: 'already_started', message: 'Game already started.'}, 409);
+    let state: GameState;
+    try { state = JSON.parse(room.state); } catch {
+      return c.json({error: 'corrupted', message: 'Room data is unavailable. Please try a different room.'}, 500);
+    }
+    // Let returning players back in regardless of game status.
     const existing = state.players.find(p => p.playerId === playerId);
     if (existing) return c.json({code, color: existing.color});
+    if (state.status !== 'waiting') return c.json({error: 'already_started', message: 'Game already started.'}, 409);
     if (state.players.length >= 4) return c.json({error: 'full', message: 'Room is full.'}, 409);
     const used = new Set(state.players.map(p => p.color));
-    const color = COLORS.find(col => !used.has(col))!;
+    const color = COLORS.find(col => !used.has(col));
+    if (!color) return c.json({error: 'full', message: 'Room is full.'}, 409);
     state.players.push({color, name, isBot: false, playerId, tokens: [{id:0,pos:-1},{id:1,pos:-1},{id:2,pos:-1},{id:3,pos:-1}], rank: null});
     state.updatedAt = new Date().toISOString();
     await db.ludoRoom.update({where: {code}, data: {state: JSON.stringify(state)}});

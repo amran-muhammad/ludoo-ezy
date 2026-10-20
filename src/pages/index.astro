@@ -178,6 +178,7 @@ joinForm.addEventListener('submit', async e => {
       else if (data.error === 'full') showError(joinError, 'That room is already full (4/4 players).');
       else if (data.error === 'already_started') showError(joinError, 'That game has already started.');
       else if (res.status === 503) showError(joinError, 'Server is unavailable right now. Please try again shortly.');
+      else if (res.status === 403) showError(joinError, 'Request blocked. Please refresh the page and try again.');
       else showError(joinError, data.message ?? 'Something went wrong. Please try again.');
       return;
     }

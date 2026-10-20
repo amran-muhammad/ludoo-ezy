@@ -312,18 +312,26 @@ export default function LudoGame({room: init}: Props) {
     const name = joinName.trim();
     if (!name) { setJoinErr('Enter your name.'); return; }
     setJoining(true); setJoinErr('');
-    const d = await post<{code?:string;color?:string;error?:string;message?:string}>(
-      `/site-api/ludo/rooms/${code}/join`, {name, playerId}
-    );
-    if (d.code) {
-      try { localStorage.setItem('ludo_player_id', playerId); } catch {}
-      await fetch_();
-    } else {
-      setJoinErr(
-        d.error === 'full' ? 'Room is full (4/4 players).' :
-        d.error === 'already_started' ? 'Game already started — you can only watch.' :
-        d.message ?? 'Could not join. Please try again.'
-      );
+    try {
+      const r = await fetch(`/site-api/ludo/rooms/${code}/join`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name, playerId}),
+      });
+      let d: {code?:string;color?:string;error?:string;message?:string} = {};
+      try { d = await r.json(); } catch {}
+      if (d.code) {
+        try { localStorage.setItem('ludo_player_id', playerId); } catch {}
+        await fetch_();
+      } else {
+        setJoinErr(
+          d.error === 'full' ? 'Room is full (4/4 players).' :
+          d.error === 'already_started' ? 'Game already started — you can only watch.' :
+          d.message ?? 'Could not join. Please try again.'
+        );
+      }
+    } catch {
+      setJoinErr('Connection failed. Please check your internet and try again.');
     }
     setJoining(false);
   }
