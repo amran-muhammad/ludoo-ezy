@@ -262,10 +262,25 @@ export default function LudoGame({room: init}: Props) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [joinName, setJoinName] = useState(() => {
-    try { return new URLSearchParams(window.location.search).get('name')?.trim() ?? ''; }
-    catch { return ''; }
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('name')?.trim() ?? p.get('joinName')?.trim() ?? '';
+    } catch { return ''; }
   });
-  const [joinErr, setJoinErr] = useState('');
+  const [joinErr, setJoinErr] = useState(() => {
+    try {
+      const err = new URLSearchParams(window.location.search).get('joinError');
+      if (!err) return '';
+      const msgs: Record<string, string> = {
+        full: 'Room is full (4/4 players).',
+        already_started: 'Game already started — you can only watch.',
+        not_found: 'Room not found. Check the code and try again.',
+        bad_request: 'Invalid name or player ID. Please refresh and try again.',
+        corrupted: 'Room data is unavailable. Please try a different room.',
+      };
+      return msgs[err] ?? 'Could not join. Please try again.';
+    } catch { return ''; }
+  });
   const [joining, setJoining] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>|null>(null);
   const autoJoined = useRef(false);
@@ -336,10 +351,17 @@ export default function LudoGame({room: init}: Props) {
         body: JSON.stringify({name, playerId}),
       });
       let d: {code?:string;color?:string;error?:string;message?:string} = {};
-      try { d = await r.json(); } catch {}
+      let jsonOk = true;
+      try { d = await r.json(); } catch { jsonOk = false; }
       if (d.code) {
         try { localStorage.setItem('ludo_player_id', playerId); } catch {}
         await fetch_();
+      } else if (!jsonOk) {
+        // Non-JSON response: likely Cloudflare Bot Integrity Check intercepting the XHR POST.
+        // Fall back to a browser navigation GET which goes through the BIC challenge flow.
+        const params = new URLSearchParams({name, playerId});
+        window.location.href = `/site-api/ludo/rooms/${code}/join-redirect?${params}`;
+        return;
       } else {
         setJoinErr(
           d.error === 'full' ? 'Room is full (4/4 players).' :

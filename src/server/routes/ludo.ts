@@ -87,6 +87,44 @@ export const ludoRoutes = new Hono()
     return c.json({room: {code: room.code, status: room.status, state}});
   })
 
+  // GET /site-api/ludo/rooms/:code/join-redirect — fallback join via browser navigation.
+  // Used when the AJAX POST fails because Cloudflare's Bot Integrity Check intercepts it
+  // and returns an HTML challenge page instead of JSON. A navigation request (not XHR)
+  // triggers BIC properly: the browser solves the JS challenge, sets cf_clearance, and the
+  // Worker receives the actual request. On success or any error, redirects to /game/:code.
+  .get('/rooms/:code/join-redirect', withDb, async c => {
+    const code = c.req.param('code');
+    const name = (c.req.query('name') ?? '').trim();
+    const playerId = c.req.query('playerId') ?? '';
+    const base = `/game/${encodeURIComponent(code)}`;
+    if (!name || name.length > 30 || !isUUID(playerId)) {
+      return c.redirect(`${base}?joinError=bad_request&joinName=${encodeURIComponent(name)}`);
+    }
+    const db = c.var.db!;
+    const room = await db.ludoRoom.findUnique({where: {code}});
+    if (!room) return c.redirect(`${base}?joinError=not_found&joinName=${encodeURIComponent(name)}`);
+    let state: GameState;
+    try { state = JSON.parse(room.state); } catch {
+      return c.redirect(`${base}?joinError=corrupted&joinName=${encodeURIComponent(name)}`);
+    }
+    const existing = state.players.find(p => p.playerId === playerId);
+    if (existing) return c.redirect(base);
+    if (state.status !== 'waiting') {
+      return c.redirect(`${base}?joinError=already_started`);
+    }
+    if (state.players.length >= 4) {
+      return c.redirect(`${base}?joinError=full&joinName=${encodeURIComponent(name)}`);
+    }
+    const used = new Set(state.players.map(p => p.color));
+    const color = COLORS.find(col => !used.has(col));
+    if (!color) return c.redirect(`${base}?joinError=full&joinName=${encodeURIComponent(name)}`);
+    state.players.push({color, name, isBot: false, playerId,
+      tokens: [{id:0,pos:-1},{id:1,pos:-1},{id:2,pos:-1},{id:3,pos:-1}], rank: null});
+    state.updatedAt = new Date().toISOString();
+    await db.ludoRoom.update({where: {code}, data: {state: JSON.stringify(state)}});
+    return c.redirect(base);
+  })
+
   // POST /site-api/ludo/rooms/:code/join — join room.
   .post('/rooms/:code/join', joinBody, withDb, async c => {
     const db = c.var.db!;
