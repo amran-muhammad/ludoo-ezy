@@ -1,184 +1,186 @@
 ---
-/**
- * The home page: PRERENDERED (built once, served as a static file, no server
- * work per visit). Words in `src/content/site.ts`.
- *
- * Filled in by the browser after load:
- *   - the visitor (`<Base isStatic>`), and the two sign-up boxes (islands);
- *   - the latest posts (`data-live="posts"`), hidden while there are none.
- */
-import SubscribeForm from '../components/site/SubscribeForm';
-import {Button} from '../components/ui/button';
-import {HOME, NEWSLETTER, PHOTOS, SIGNUP_NOTE, withName} from '../content/site';
+export const prerender = true;
 import Base from '../layouts/Base.astro';
 import {staticContext} from '../server/page';
+import {SITE} from '../content/site';
 
-export const prerender = true;
-
-const {site, viewer} = await staticContext(Astro.request);
-const name = site?.name ?? 'Community';
-/** `{readers}` is filled now; `{name}` stays for the browser to refresh after a rename. */
-const brandText = (text: string) => text.replaceAll('{readers}', NEWSLETTER.readers);
-const initialsOf = (who: string) =>
-  who
-    .split(/\s+/)
-    .map(part => part[0] ?? '')
-    .join('')
-    .slice(0, 2);
+const {site} = await staticContext(Astro.request);
 ---
 
-<Base site={site} viewer={viewer} isStatic description={`${NEWSLETTER.name}: ${NEWSLETTER.tagline}`}>
-  <!-- Hero: what it is, and the sign-up box, above the fold on a phone. -->
-  <section class="mx-auto grid max-w-6xl gap-12 px-4 pt-12 pb-16 sm:px-6 sm:pt-20 lg:grid-cols-[1.15fr_1fr] lg:items-center lg:gap-16">
-    <div class="flex flex-col gap-6">
-      <p class="text-[0.625rem] font-semibold tracking-[0.2em] text-muted-foreground uppercase">
-        <span data-brand-text={HOME.hero.eyebrow}>{withName(HOME.hero.eyebrow, name)}</span>
-        <span aria-hidden="true"> · </span>{NEWSLETTER.cadence}
-      </p>
-      <h1 class="text-[2.6rem] leading-[1.05] font-semibold tracking-tight sm:text-6xl">
-        <span class="block italic font-normal">{NEWSLETTER.name}.</span>
-        {HOME.hero.title}
-      </h1>
-      <p class="max-w-xl text-lg leading-relaxed text-muted-foreground">{HOME.hero.body}</p>
-      <div class="max-w-lg pt-2">
-        <SubscribeForm client:load source="home" layout="inline" note={SIGNUP_NOTE} />
-      </div>
-      <p class="text-sm text-muted-foreground">
-        Read by <strong class="font-semibold text-foreground">{NEWSLETTER.readers}</strong> curious people ·
-        <a href="/archive" class="underline underline-offset-4 hover:text-foreground">Read past issues first</a>
-      </p>
+<Base site={site} title={SITE.tagline} description={SITE.description} isStatic>
+  <div class="mx-auto max-w-5xl px-4 sm:px-6 py-16">
+    <div class="text-center mb-14">
+      <h1 class="text-5xl font-bold tracking-tight mb-4">{site?.name ?? 'Ludo'}</h1>
+      <p class="text-xl text-muted-foreground">{SITE.tagline}</p>
     </div>
-    <figure class="flex flex-col gap-3">
-      <img
-        src={PHOTOS.home.src}
-        alt={PHOTOS.home.alt}
-        width="1600"
-        height="1200"
-        class="aspect-[4/3] w-full bg-muted object-cover lg:aspect-[4/5]"
-        fetchpriority="high"
-      />
-      <figcaption class="text-xs text-muted-foreground">Where the Sunday issue gets written.</figcaption>
-    </figure>
-  </section>
 
-  <!-- What you get: the four parts of every issue. -->
-  <section class="border-y bg-card" aria-labelledby="what-you-get">
-    <div class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
-      <div class="flex max-w-2xl flex-col gap-3">
-        <h2 id="what-you-get" class="text-3xl font-semibold sm:text-4xl">{HOME.features.title}</h2>
-        <p class="text-muted-foreground">{HOME.features.lede}</p>
-      </div>
-      <ol class="mt-12 grid gap-x-12 gap-y-10 sm:grid-cols-2">
-        {
-          HOME.features.items.map((item, index) => (
-            <li class="flex gap-5 border-t border-foreground pt-6">
-              <span class="font-heading text-3xl text-muted-foreground tabular-nums" aria-hidden="true">
-                {String(index + 1).padStart(2, '0')}
-              </span>
-              <div class="flex flex-col gap-2">
-                <h3 class="text-xl font-semibold">{item.title}</h3>
-                <p class="leading-relaxed text-muted-foreground">{item.body}</p>
-              </div>
-            </li>
-          ))
-        }
-      </ol>
-    </div>
-  </section>
-
-  <!-- Latest posts, from the community's blog (hidden until some arrive). -->
-  <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20" data-live="posts" aria-labelledby="latest" hidden>
-    <div class="flex flex-wrap items-end justify-between gap-4 border-b border-foreground pb-4">
-      <h2 id="latest" class="text-3xl font-semibold sm:text-4xl">The latest issues</h2>
-      <a href="/archive" class="text-xs font-semibold tracking-widest uppercase hover:underline underline-offset-4">Browse the archive →</a>
-    </div>
-    <div class="grid gap-x-12 md:grid-cols-2" data-list></div>
-  </section>
-
-  <!-- Reader quotes. PLACEHOLDER: replace them in src/content/site.ts. -->
-  <section class="bg-muted/50" aria-labelledby="readers">
-    <div class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
-      <h2 id="readers" class="text-3xl font-semibold sm:text-4xl">What readers say</h2>
-      <div class="mt-10 grid gap-10 md:grid-cols-3">
-        {
-          HOME.quotes.map(quote => (
-            <figure class="flex flex-col gap-5">
-              <blockquote class="font-heading text-xl leading-snug italic">“{quote.text}”</blockquote>
-              <figcaption class="mt-auto flex items-center gap-3">
-                <span
-                  class="inline-flex size-9 items-center justify-center rounded-full bg-background text-xs font-semibold text-muted-foreground ring-1 ring-border"
-                  aria-hidden="true">
-                  {initialsOf(quote.author)}
-                </span>
-                <span class="flex flex-col text-sm">
-                  <span class="font-semibold">{quote.author}</span>
-                  <span class="text-muted-foreground">{quote.role}</span>
-                </span>
-              </figcaption>
-            </figure>
-          ))
-        }
-      </div>
-    </div>
-  </section>
-
-  <!-- The last call to subscribe. -->
-  <section class="mx-auto max-w-6xl px-4 pt-16 sm:px-6 sm:pt-20" aria-labelledby="cta">
-    <div class="grid gap-10 border border-foreground p-6 sm:p-10 lg:grid-cols-2 lg:items-center lg:p-14">
-      <div class="flex flex-col gap-3">
-        <h2 id="cta" class="text-3xl font-semibold sm:text-4xl">{HOME.cta.title}</h2>
-        <p class="text-muted-foreground" data-brand-text={brandText(HOME.cta.body)}>{withName(HOME.cta.body, name)}</p>
-        <div class="pt-2">
-          <Button asChild variant="link" className="px-0">
-            <a href="/subscribe">Compare free and paid →</a>
-          </Button>
+    <div class="grid gap-8 sm:grid-cols-2 max-w-2xl mx-auto">
+      <!-- Create game -->
+      <div class="border rounded-xl p-8 flex flex-col gap-5 bg-card">
+        <div>
+          <h2 class="text-xl font-semibold mb-1">New game</h2>
+          <p class="text-sm text-muted-foreground">Create a room and share the link with up to 3 friends. Unfilled spots become bots.</p>
         </div>
+        <form id="create-form" class="flex flex-col gap-3" novalidate>
+          <div class="flex flex-col gap-1">
+            <label for="create-name" class="text-sm font-medium">Your name</label>
+            <input id="create-name" name="name" type="text" maxlength="30" autocomplete="off" required
+              placeholder="e.g. Alice"
+              class="border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+            <span id="create-name-error" class="text-xs text-destructive hidden" aria-live="polite"></span>
+          </div>
+          <button type="submit" id="create-btn"
+            class="rounded-md bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            <span id="create-label">Create game</span>
+          </button>
+        </form>
       </div>
-      <SubscribeForm client:visible source="home-bottom" withName note={SIGNUP_NOTE} buttonLabel="Send me Sunday’s issue" />
+
+      <!-- Join game -->
+      <div class="border rounded-xl p-8 flex flex-col gap-5 bg-card">
+        <div>
+          <h2 class="text-xl font-semibold mb-1">Join a game</h2>
+          <p class="text-sm text-muted-foreground">Got a room code from a friend? Enter it below to join their game.</p>
+        </div>
+        <form id="join-form" class="flex flex-col gap-3" novalidate>
+          <div class="flex flex-col gap-1">
+            <label for="join-name" class="text-sm font-medium">Your name</label>
+            <input id="join-name" name="name" type="text" maxlength="30" autocomplete="off" required
+              placeholder="e.g. Bob"
+              class="border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+            <span id="join-name-error" class="text-xs text-destructive hidden" aria-live="polite"></span>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label for="join-code" class="text-sm font-medium">Room code</label>
+            <input id="join-code" name="code" type="text" maxlength="8" autocomplete="off" required
+              placeholder="e.g. ABC123"
+              class="border rounded-md px-3 py-2 text-sm bg-background uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-ring" />
+            <span id="join-code-error" class="text-xs text-destructive hidden" aria-live="polite"></span>
+          </div>
+          <button type="submit" id="join-btn"
+            class="rounded-md bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            <span id="join-label">Join game</span>
+          </button>
+        </form>
+        <span id="join-error" class="text-sm text-destructive hidden" aria-live="polite"></span>
+      </div>
     </div>
-  </section>
+
+    <!-- How to play -->
+    <section id="how-to-play" class="mt-20 max-w-2xl mx-auto">
+      <h2 class="text-2xl font-bold mb-6">How to play</h2>
+      <ol class="flex flex-col gap-4 text-sm text-muted-foreground">
+        <li class="flex gap-3"><span class="font-bold text-foreground tabular-nums">1.</span><span>Create a game and share the link with friends. Wait for them to join — or press <strong class="text-foreground">Start</strong> at any time to fill empty spots with bots.</span></li>
+        <li class="flex gap-3"><span class="font-bold text-foreground tabular-nums">2.</span><span>On your turn, click <strong class="text-foreground">Roll</strong> to roll the dice. You need a 6 to bring a token out of home.</span></li>
+        <li class="flex gap-3"><span class="font-bold text-foreground tabular-nums">3.</span><span>Click the token you want to move. Land on an opponent's token to send them back to their home.</span></li>
+        <li class="flex gap-3"><span class="font-bold text-foreground tabular-nums">4.</span><span>Get all four of your tokens to the centre to win. Rolling a 6 earns you a bonus turn.</span></li>
+      </ol>
+    </section>
+  </div>
 </Base>
 
 <script>
-  import {formatDate} from '../lib/format';
-  import type {PostsPage} from '../lib/types';
+// Player identity — random UUID stored in localStorage per browser.
+function getOrCreatePlayerId(): string {
+  try {
+    let id = localStorage.getItem('ludo_player_id');
+    if (!id) { id = crypto.randomUUID(); localStorage.setItem('ludo_player_id', id); }
+    return id;
+  } catch { return crypto.randomUUID(); }
+}
 
-  /** One element with text: never HTML from an answer. */
-  const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text) node.textContent = text;
-    return node;
-  };
+function showError(el: HTMLElement | null, msg: string) {
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+function clearError(el: HTMLElement | null) {
+  if (!el) return;
+  el.textContent = '';
+  el.classList.add('hidden');
+}
 
-  async function latestPosts() {
-    const section = document.querySelector<HTMLElement>('[data-live="posts"]');
-    const list = section?.querySelector<HTMLElement>('[data-list]');
-    if (!section || !list) return;
-    try {
-      const res = await fetch('/site-api/posts?perPage=4', {headers: {accept: 'application/json'}});
-      if (!res.ok) return;
-      const data = (await res.json()) as PostsPage;
-      for (const post of data.posts) {
-        const article = el('article', 'group relative flex flex-col gap-2 border-b py-8');
-        const meta = el('p', 'text-[0.625rem] font-semibold tracking-widest text-muted-foreground uppercase');
-        meta.textContent = [formatDate(post.publishedAt), post.categories[0]?.name].filter(Boolean).join(' · ');
-        const heading = el('h3', 'text-xl leading-snug font-semibold sm:text-2xl');
-        const link = el('a', 'after:absolute after:inset-0 decoration-1 underline-offset-4 group-hover:underline', post.title);
-        link.href = `/blog/${encodeURIComponent(post.slug)}`;
-        heading.append(link);
-        article.append(meta, heading);
-        if (post.excerpt) {
-          const text = post.excerpt.length > 160 ? `${post.excerpt.slice(0, 160).trimEnd()}…` : post.excerpt;
-          article.append(el('p', 'leading-relaxed text-muted-foreground', text));
-        }
-        list.append(article);
-      }
-      if (data.posts.length > 0) section.hidden = false;
-    } catch {
-      // The section stays hidden: the page is complete without it.
-    }
+function setBusy(btn: HTMLButtonElement, label: HTMLElement | null, busy: boolean, text = 'Creating…') {
+  btn.disabled = busy;
+  btn.setAttribute('aria-busy', String(busy));
+  if (label) label.textContent = busy ? text : btn.dataset.default!;
+}
+
+// ── Create form ──────────────────────────────────────────────────────────────
+const createForm = document.getElementById('create-form') as HTMLFormElement;
+const createBtn = document.getElementById('create-btn') as HTMLButtonElement;
+const createLabel = document.getElementById('create-label') as HTMLElement;
+createBtn.dataset.default = createLabel.textContent!;
+
+createForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const nameInput = createForm.querySelector<HTMLInputElement>('#create-name')!;
+  const nameError = document.getElementById('create-name-error');
+  const name = nameInput.value.trim();
+  clearError(nameError);
+  if (!name) { showError(nameError, 'Enter your name.'); nameInput.focus(); return; }
+
+  setBusy(createBtn, createLabel, true, 'Creating…');
+  try {
+    const res = await fetch('/site-api/ludo/rooms', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name, playerId: getOrCreatePlayerId()}),
+    });
+    const data = await res.json() as {code?: string; message?: string};
+    if (!res.ok || !data.code) { showError(nameError, data.message ?? 'Something went wrong.'); return; }
+    localStorage.setItem('ludo_name', name);
+    window.location.href = `/game/${data.code}`;
+  } catch {
+    showError(nameError, 'Could not reach the server. Try again.');
+  } finally {
+    setBusy(createBtn, createLabel, false);
   }
+});
 
-  void latestPosts();
+// ── Join form ────────────────────────────────────────────────────────────────
+const joinForm = document.getElementById('join-form') as HTMLFormElement;
+const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
+const joinLabel = document.getElementById('join-label') as HTMLElement;
+joinBtn.dataset.default = joinLabel.textContent!;
+
+joinForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const nameInput = joinForm.querySelector<HTMLInputElement>('#join-name')!;
+  const codeInput = joinForm.querySelector<HTMLInputElement>('#join-code')!;
+  const nameError = document.getElementById('join-name-error');
+  const codeError = document.getElementById('join-code-error');
+  const joinError = document.getElementById('join-error');
+  clearError(nameError); clearError(codeError); clearError(joinError);
+
+  const name = nameInput.value.trim();
+  const code = codeInput.value.trim().toUpperCase();
+  let ok = true;
+  if (!name) { showError(nameError, 'Enter your name.'); ok = false; }
+  if (!code) { showError(codeError, 'Enter a room code.'); ok = false; }
+  if (!ok) { if (!name) nameInput.focus(); else codeInput.focus(); return; }
+
+  setBusy(joinBtn, joinLabel, true, 'Joining…');
+  try {
+    const res = await fetch(`/site-api/ludo/rooms/${code}/join`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name, playerId: getOrCreatePlayerId()}),
+    });
+    const data = await res.json() as {code?: string; message?: string; error?: string};
+    if (!res.ok) {
+      if (data.error === 'not_found') showError(codeError, 'Room not found. Check the code and try again.');
+      else if (data.error === 'full') showError(joinError, 'That room is already full.');
+      else if (data.error === 'already_started') showError(joinError, 'That game has already started.');
+      else showError(joinError, data.message ?? 'Something went wrong.');
+      return;
+    }
+    localStorage.setItem('ludo_name', name);
+    window.location.href = `/game/${data.code ?? code}`;
+  } catch {
+    showError(joinError, 'Could not reach the server. Try again.');
+  } finally {
+    setBusy(joinBtn, joinLabel, false);
+  }
+});
 </script>

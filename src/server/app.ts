@@ -4,14 +4,11 @@ import type {Abilities} from '../lib/types';
 import {config} from '../platform/config';
 import {problem, sameOrigin} from '../platform/guards';
 import {isPreview} from '../platform/api';
-import {contactRoutes} from './routes/contact';
-import {jobRoutes, MANAGE_JOBS} from './routes/jobs';
+import {ludoRoutes} from './routes/ludo';
 import {memberRoutes} from './routes/members';
-import {MANAGE_NEWSLETTER, newsletterRoutes} from './routes/newsletter';
-import {postRoutes} from './routes/posts';
 import {siteRoutes} from './routes/site';
 import {uploadRoutes} from './routes/uploads';
-import {getViewer, getViewerPermissions, grants} from '../platform/viewer';
+import {getViewer, getViewerPermissions} from '../platform/viewer';
 
 /**
  * The Site API: this site's ONLY backend, one Hono app at `/site-api/*`.
@@ -24,18 +21,10 @@ import {getViewer, getViewerPermissions, grants} from '../platform/viewer';
  *
  *   GET  /health        what this site has been given (booleans only)
  *   GET  /me            the visitor + what they may do here
- *   GET  /site          the community's brand                 routes/site.ts
- *   *    /posts/...     the community's blog (public API)      routes/posts.ts
- *   *    /jobs/...      the job board (Site Database)          routes/jobs.ts
- *   GET  /members      members directory (Community Key)      routes/members.ts
- *   *    /uploads       a member's files (Site Database)       routes/uploads.ts
- *   *    /newsletter    sign-ups + reader list (Site Database)  routes/newsletter.ts
- *   *    /contact       the contact form (Site Database)        routes/contact.ts
- *
- * Add a feature as a new `routes/<name>.ts` and one `.route()` line below,
- * CHAINED so `AppType` carries every route to the typed client. Errors are
- * JSON `{error, message}`. `sameOrigin` refuses every cross-site write; keep
- * it (a webhook that must accept one gets its own app, mounted before it).
+ *   GET  /site          the community's brand                  routes/site.ts
+ *   *    /ludo          the Ludo game rooms                    routes/ludo.ts
+ *   GET  /members      members directory (Community Key)       routes/members.ts
+ *   *    /uploads       a member's files (Site Database)        routes/uploads.ts
  */
 export const app = new Hono()
   .basePath('/site-api')
@@ -50,33 +39,23 @@ export const app = new Hono()
     })
   )
 
-  // `abilities` only decides what the UI SHOWS; every guarded route checks again.
-  // The two lookups run in PARALLEL (and once per request): one round trip.
   .get('/me', async c => {
-    const [viewer, perms] = await Promise.all([
+    const [viewer] = await Promise.all([
       getViewer(c.req.raw),
       getViewerPermissions(c.req.raw),
     ]);
     c.header('Cache-Control', 'private, no-store');
-    const permissions = viewer.state === 'member' ? perms : new Set<string>();
-    const abilities: Abilities = {
-      manageJobs: grants(permissions, MANAGE_JOBS),
-      manageNewsletter: grants(permissions, MANAGE_NEWSLETTER),
-    };
+    const abilities: Abilities = {};
     return c.json({viewer, abilities});
   })
 
   .route('/site', siteRoutes)
-  .route('/posts', postRoutes)
-  .route('/jobs', jobRoutes)
+  .route('/ludo', ludoRoutes)
   .route('/members', memberRoutes)
   .route('/uploads', uploadRoutes)
-  .route('/newsletter', newsletterRoutes)
-  .route('/contact', contactRoutes)
 
   .notFound(c => c.json(problem('not_found', 'No such Site API route.'), 404))
   .onError((err, c) => {
-    // The message only: an error object can carry request details.
     console.error(`site-api ${c.req.method} ${c.req.path}: ${err.message}`);
     return c.json(problem('internal_error', 'Something went wrong.'), 500);
   });

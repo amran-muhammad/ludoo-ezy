@@ -1,0 +1,38 @@
+---
+import NotFound from '../../components/NotFound.astro';
+import LudoGame from '../../components/LudoGame';
+import Base from '../../layouts/Base.astro';
+import {backend, read} from '../../server/backend';
+import {pageContext} from '../../server/page';
+import type {GameState} from '../../lib/ludo';
+
+const code = (Astro.params.code ?? '').toUpperCase();
+const {site, viewer} = await pageContext(Astro.request, Astro.response);
+const api = backend(Astro.request);
+
+const data = await read<{room: {code: string; status: string; state: GameState}}>(
+  api.ludo.rooms[':code'].$get({param: {code}})
+);
+
+if (!data?.room) {
+  Astro.response.status = 404;
+}
+---
+
+{data?.room
+  ? (
+    <Base site={site} viewer={viewer} title={`Game ${code}`} noindex>
+      <LudoGame client:load room={data.room} />
+    </Base>
+  ) : (
+    <Base site={site} viewer={viewer} title="Room not found">
+      <div class="mx-auto max-w-xl px-4 py-24 text-center">
+        <h1 class="text-3xl font-bold mb-4">Room not found</h1>
+        <p class="text-muted-foreground mb-8">The room code <strong class="text-foreground">{code}</strong> does not exist or has expired.</p>
+        <a href="/" class="rounded-md bg-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold hover:bg-primary/90">
+          Start a new game
+        </a>
+      </div>
+    </Base>
+  )
+}

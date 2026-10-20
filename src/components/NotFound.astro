@@ -1,26 +1,16 @@
 ---
-/**
- * The branded 404 body — rendered by `pages/404.astro` for any address with no
- * page, and by the post page for an unknown slug. Both set a 404 status.
- */
-import {Button} from './ui/button';
 import type {Site} from '../lib/types';
 
 interface Props {
-  site: Site | null;
+  site?: Site | null;
 }
-
-const {site} = Astro.props;
 ---
 
-<section class="mx-auto flex max-w-2xl flex-col items-start gap-5 px-4 py-24 sm:px-6">
-  <p class="text-[0.625rem] font-semibold tracking-[0.2em] text-muted-foreground uppercase">Error 404</p>
-  <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">This page isn’t in the archive</h1>
-  <p class="text-lg text-muted-foreground">
-    The address may be mistyped, or the post may have moved. Everything {site?.name ?? 'we'} published is in the archive.
-  </p>
-  <div class="flex flex-wrap gap-3">
-    <Button asChild><a href="/archive">Browse the archive</a></Button>
-    <Button asChild variant="outline"><a href="/">Back to home</a></Button>
-  </div>
+<section class="mx-auto flex max-w-xl flex-col items-center gap-5 px-4 py-24 text-center sm:px-6">
+  <p class="text-xs font-semibold tracking-widest text-muted-foreground uppercase">404</p>
+  <h1 class="text-3xl font-bold tracking-tight">Page not found</h1>
+  <p class="text-muted-foreground">That address doesn't exist. Head back and start a new game.</p>
+  <a href="/" class="rounded-md bg-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors">
+    Go home
+  </a>
 </section>

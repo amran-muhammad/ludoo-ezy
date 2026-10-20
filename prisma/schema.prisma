@@ -72,40 +72,19 @@ model Upload {
   @@map("uploads")
 }
 
-/// A newsletter subscriber, from the sign-up boxes on the website. The owner
-/// asked for these emails: they are how the newsletter reaches readers. Shown
-/// only to site admins (`community:site:update`) in `/portal/subscribers`.
-model Subscriber {
-  id        Int      @id @default(autoincrement())
-  /// Lower-cased and trimmed; one row per address.
-  email     String   @unique @db.VarChar(254)
-  /// Optional first name, for the greeting line of the email.
-  firstName String?  @map("first_name") @db.VarChar(60)
-  /// `free` or `paid` (the tier they were interested in when signing up).
-  tier      String   @default("free") @db.VarChar(10)
-  /// Which sign-up box: `home`, `subscribe`, `post`, `footer`…
-  source    String   @default("home") @db.VarChar(30)
-  /// `active` or `unsubscribed`.
-  status    String   @default("active") @db.VarChar(15)
+/// A Ludo game room. Full game state stored as JSON so the schema stays simple.
+/// Rooms expire after 24 h of inactivity (cleaned up on demand, not by a cron).
+model LudoRoom {
+  id        String   @id @default(cuid())
+  /// 6-character uppercase code shown in the share link.
+  code      String   @unique @db.VarChar(8)
+  /// Full game state as JSON (GameState type from src/lib/ludo.ts).
+  state     String   @db.Text
+  /// `waiting` | `playing` | `finished`
+  status    String   @default("waiting") @db.VarChar(10)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([status, id])
-  @@map("subscribers")
-}
-
-/// A message from the contact form (`/contact`). Read by site admins in
-/// `/portal/messages`; the sender's email is there so the owner can reply.
-model ContactMessage {
-  id        Int      @id @default(autoincrement())
-  name      String   @db.VarChar(80)
-  email     String   @db.VarChar(254)
-  /// `general`, `sponsorship`, `tip` or `press`.
-  topic     String   @default("general") @db.VarChar(20)
-  body      String   @db.VarChar(4000)
-  /// `new` or `read`.
-  status    String   @default("new") @db.VarChar(10)
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@map("contact_messages")
+  @@index([status, updatedAt])
+  @@map("ludo_rooms")
 }

@@ -1,127 +1,54 @@
 ---
-/**
- * Header, footer and <head> for every page. The page fetches the brand (`site`)
- * and the visitor (`viewer`) with `pageContext` and passes them in, so the
- * layout never makes an API call of its own.
- *
- * Sign in, sign up, joining and the community itself are App pages on this
- * same hostname: always plain `<a href>`, never a client-side route.
- */
 import '../styles/site.css';
-
-import BrandMark from '../components/BrandMark.astro';
-import MobileNav from '../components/site/MobileNav';
-import {Button} from '../components/ui/button';
-import {Separator} from '../components/ui/separator';
-import {NAV, NEWSLETTER} from '../content/site';
 import type {Site, Viewer} from '../lib/types';
-import {initials} from '../lib/format';
+import {NAV, SITE} from '../content/site';
 
 interface Props {
-  site: Site | null;
-  viewer: Viewer;
-  /** The page's own name; the tab shows "<title> · <community>". Omit on home. */
+  site?: Site | null;
+  viewer?: Viewer;
   title?: string;
   description?: string;
-  /** Extra <head> tags, e.g. og:image on a post. */
-  image?: string | null;
-  /**
-   * A PRERENDERED page (`export const prerender = true`): built once, served
-   * as a static file, so it knows no visitor. The header then renders the
-   * signed-out view and the browser fills in the visitor (`/site-api/me`) and
-   * a renamed community (`/site-api/site`) after load.
-   */
   isStatic?: boolean;
+  noindex?: boolean;
 }
 
-const {site, viewer, title, description, image, isStatic = false} = Astro.props;
-const name = site?.name ?? 'Community';
-const fullTitle = title ? `${title} · ${name}` : name;
-const path = Astro.url.pathname;
-const active = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
-// Back to this page after signing in. A PATH only: the App ignores full URLs.
-const back = encodeURIComponent(`${path}${Astro.url.search}`);
-const year = new Date().getUTCFullYear();
+const {site, title, description, isStatic = false, noindex = false} = Astro.props;
+const pageTitle = title ? `${title} — ${SITE.name}` : SITE.name;
+const pageDesc = description ?? SITE.description;
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url).href;
+const current = Astro.url.pathname;
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" class="h-full">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{fullTitle}</title>
-    {description && <meta name="description" content={description} />}
-    <meta property="og:title" content={title ?? name} />
-    {description && <meta property="og:description" content={description} />}
-    {image && <meta property="og:image" content={image} />}
-    {site?.favIcon && <link rel="icon" href={site.favIcon} />}
-    <meta name="theme-color" content="#ffffff" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={pageDesc} />
+    <link rel="canonical" href={canonicalUrl} />
+    {noindex && <meta name="robots" content="noindex" />}
+    {isStatic && <script src="/site-api/static-page.js" is:inline />}
   </head>
-  <body
-    class="flex min-h-svh flex-col bg-background text-foreground antialiased"
-    data-viewer={viewer.state}
-    data-static={isStatic ? '1' : undefined}>
-    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:bg-background focus:px-4 focus:py-2 focus:ring-2 focus:ring-ring">
+  <body class="min-h-full bg-background text-foreground flex flex-col">
+    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-primary focus:px-3 focus:py-1.5 focus:text-primary-foreground focus:text-sm">
       Skip to content
     </a>
-    <header class="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div class="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6">
-        <a href="/" class="brand flex min-w-0 items-center gap-2.5">
-          <BrandMark site={site} size={28} />
-          <span class="brand-name truncate font-heading text-lg font-semibold" data-brand-text="{name}" data-built-name={name}>{name}</span>
-        </a>
-        <nav class="ml-4 hidden items-center gap-6 md:flex" aria-label="Main">
+
+    <header class="sticky top-0 z-40 border-b bg-background/95 backdrop-blur-sm">
+      <div class="mx-auto flex h-14 max-w-5xl items-center gap-6 px-4 sm:px-6">
+        <a href="/" class="font-heading text-xl font-bold tracking-tight">{site?.name ?? SITE.name}</a>
+        <nav aria-label="Site" class="flex items-center gap-5 ml-2">
           {NAV.map(item => (
             <a
               href={item.href}
-              aria-current={active(item.href) ? 'page' : undefined}
-              class:list={[
-                'text-xs font-semibold tracking-widest uppercase transition-colors',
-                active(item.href) ? 'text-foreground underline decoration-1 underline-offset-[6px]' : 'text-muted-foreground hover:text-foreground',
-              ]}>
+              aria-current={item.href === current || (item.href !== '/' && current.startsWith(item.href)) ? 'page' : undefined}
+              class="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors aria-[current=page]:text-foreground"
+            >
               {item.label}
             </a>
           ))}
-          <a
-            href="/portal"
-            class="text-xs font-semibold tracking-widest text-muted-foreground uppercase hover:text-foreground"
-            data-member-only
-            hidden={viewer.state !== 'member'}>
-            Dashboard
-          </a>
         </nav>
-        <div class="ml-auto flex items-center gap-2">
-          <div class="session hidden items-center gap-2 md:flex" data-session>
-            {viewer.state === 'member' ? (
-              <>
-                <a class="button ghost small-button" href="/feeds">Community</a>
-                <span class="viewer" title={viewer.name ?? ''}>
-                  {viewer.avatar ? (
-                    <img src={viewer.avatar} alt="" width="28" height="28" />
-                  ) : (
-                    <span class="avatar-fallback" aria-hidden="true">{initials(viewer.name ?? '')}</span>
-                  )}
-                </span>
-                {viewer.preview ? (
-                  <span class="chip" title="Editor preview: a stand-in signed-in member">Preview</span>
-                ) : (
-                  <button class="button link small-button" type="button" data-logout>Sign out</button>
-                )}
-              </>
-            ) : viewer.state === 'applicant' ? (
-              <a class="button small-button" href="/join">Finish joining</a>
-            ) : (
-              <>
-                <a class="button link small-button" href={`/login?redirectTo=${back}`}>Log in</a>
-                <a class="button ghost small-button" href="/join">Join</a>
-              </>
-            )}
-          </div>
-          <Button asChild size="sm" className="hidden sm:inline-flex">
-            <a href="/subscribe" data-guest-only hidden={viewer.state === 'member'}>Subscribe</a>
-          </Button>
-          <MobileNav client:load items={NAV} current={path} back={back} brand={name} />
-        </div>
       </div>
     </header>
 
@@ -129,98 +56,10 @@ const year = new Date().getUTCFullYear();
       <slot />
     </main>
 
-    <footer class="mt-24 border-t bg-muted/40">
-      <div class="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-[2fr_1fr_1fr]">
-        <div class="flex max-w-sm flex-col gap-3">
-          <a href="/" class="flex items-center gap-2.5">
-            <BrandMark site={site} size={28} />
-            <span class="font-heading text-lg font-semibold" data-brand-text="{name}">{name}</span>
-          </a>
-          <p class="text-sm leading-relaxed text-muted-foreground">
-            <strong class="font-semibold text-foreground">{NEWSLETTER.name}</strong> — {NEWSLETTER.tagline} {NEWSLETTER.cadence}, to {NEWSLETTER.readers} readers.
-          </p>
-          <div>
-            <Button asChild variant="outline" size="sm">
-              <a href="/subscribe">Get the newsletter</a>
-            </Button>
-          </div>
-        </div>
-        <nav aria-label="Footer" class="flex flex-col gap-3">
-          <p class="text-[0.625rem] font-semibold tracking-widest text-muted-foreground uppercase">The newsletter</p>
-          {NAV.map(item => <a class="text-sm hover:underline underline-offset-4" href={item.href}>{item.label}</a>)}
-        </nav>
-        <nav aria-label="Community" class="flex flex-col gap-3">
-          <p class="text-[0.625rem] font-semibold tracking-widest text-muted-foreground uppercase">The community</p>
-          <a class="text-sm hover:underline underline-offset-4" href="/join">Join</a>
-          <a class="text-sm hover:underline underline-offset-4" href={`/login?redirectTo=${back}`}>Log in</a>
-          <a class="text-sm hover:underline underline-offset-4" href="/feeds">Community feed</a>
-          <a class="text-sm hover:underline underline-offset-4" href="/portal" data-member-only hidden={viewer.state !== 'member'}>Dashboard</a>
-        </nav>
-      </div>
-      <Separator />
-      <div class="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:justify-between sm:px-6">
-        <span data-brand-text="© {year} {name}">© {year} {name}</span>
-        <span>Written by a person. Read by people.</span>
+    <footer class="border-t py-8 mt-12">
+      <div class="mx-auto max-w-5xl px-4 sm:px-6 text-sm text-muted-foreground text-center">
+        {site?.name ?? SITE.name} · {SITE.tagline}
       </div>
     </footer>
-
-    <script>
-      import {logout, refreshSession} from '../platform/browser';
-      import {hydrateStaticPage} from '../platform/static-page';
-
-      if (document.body.dataset.static === '1') void hydrateStaticPage();
-
-      // The server saw an expired access token but a refresh cookie: refresh
-      // ONCE in the browser (the server never does), then re-render signed in.
-      if (document.body.dataset.viewer === 'returning') {
-        const key = 'site:refreshed';
-        let first = true;
-        try {
-          first = !sessionStorage.getItem(key);
-          sessionStorage.setItem(key, '1');
-        } catch {
-          // Storage blocked: no way to remember the reload, so never reload
-          // (it would repeat on every load). The visitor signs in again.
-          first = false;
-        }
-        if (first) void refreshSession().then(ok => ok && window.location.reload());
-      } else {
-        try {
-          sessionStorage.removeItem('site:refreshed');
-        } catch {
-          // Storage blocked: nothing to clear.
-        }
-      }
-
-      // Every button shows when it is busy (AGENTS.md "Buttons and forms").
-      const busy = (button: HTMLButtonElement, label?: string) => {
-        button.disabled = true;
-        button.setAttribute('aria-busy', 'true');
-        if (label) button.textContent = label;
-      };
-
-      document.querySelectorAll<HTMLButtonElement>('[data-logout]').forEach(button =>
-        button.addEventListener('click', () => {
-          busy(button, 'Signing out…');
-          void logout();
-        })
-      );
-
-      // A search / filter form (GET) navigates: show its button busy until the next page.
-      document.addEventListener('submit', event => {
-        const form = event.target;
-        if (event.defaultPrevented || !(form instanceof HTMLFormElement)) return;
-        if (form.method.toLowerCase() !== 'get') return;
-        if (event.submitter instanceof HTMLButtonElement) busy(event.submitter);
-      });
-      // Back/forward restores a page from memory: give its buttons back.
-      window.addEventListener('pageshow', event => {
-        if (!event.persisted) return;
-        document.querySelectorAll<HTMLButtonElement>('button[aria-busy="true"]').forEach(button => {
-          button.disabled = false;
-          button.removeAttribute('aria-busy');
-        });
-      });
-    </script>
   </body>
 </html>

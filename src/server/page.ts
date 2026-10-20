@@ -23,7 +23,7 @@ export async function pageContext(request: Request, response: {headers: Headers}
     api,
     site: brand?.site ?? null,
     viewer: me?.viewer ?? GUEST,
-    abilities: me?.abilities ?? {manageJobs: false, manageNewsletter: false},
+    abilities: me?.abilities ?? {},
   };
 }
 
