@@ -127,12 +127,16 @@ createForm.addEventListener('submit', async e => {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({name, playerId: getOrCreatePlayerId()}),
     });
-    const data = await res.json() as {code?: string; message?: string};
-    if (!res.ok || !data.code) { showError(nameError, data.message ?? 'Something went wrong.'); return; }
+    let data: {code?: string; message?: string} = {};
+    try { data = await res.json(); } catch { /* server returned non-JSON */ }
+    if (!res.ok || !data.code) {
+      showError(nameError, data.message ?? (res.status === 503 ? 'Server is unavailable. Try again shortly.' : 'Something went wrong. Please try again.'));
+      return;
+    }
     localStorage.setItem('ludo_name', name);
     window.location.href = `/game/${data.code}`;
   } catch {
-    showError(nameError, 'Could not reach the server. Try again.');
+    showError(nameError, 'Could not connect. Check your internet and try again.');
   } finally {
     setBusy(createBtn, createLabel, false);
   }
@@ -167,18 +171,20 @@ joinForm.addEventListener('submit', async e => {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({name, playerId: getOrCreatePlayerId()}),
     });
-    const data = await res.json() as {code?: string; message?: string; error?: string};
+    let data: {code?: string; message?: string; error?: string} = {};
+    try { data = await res.json(); } catch { /* server returned non-JSON (e.g. gateway HTML) */ }
     if (!res.ok) {
       if (data.error === 'not_found') showError(codeError, 'Room not found. Check the code and try again.');
-      else if (data.error === 'full') showError(joinError, 'That room is already full.');
+      else if (data.error === 'full') showError(joinError, 'That room is already full (4/4 players).');
       else if (data.error === 'already_started') showError(joinError, 'That game has already started.');
-      else showError(joinError, data.message ?? 'Something went wrong.');
+      else if (res.status === 503) showError(joinError, 'Server is unavailable right now. Please try again shortly.');
+      else showError(joinError, data.message ?? 'Something went wrong. Please try again.');
       return;
     }
     localStorage.setItem('ludo_name', name);
     window.location.href = `/game/${data.code ?? code}`;
   } catch {
-    showError(joinError, 'Could not reach the server. Try again.');
+    showError(joinError, 'Could not connect to the server. Check your internet connection and try again.');
   } finally {
     setBusy(joinBtn, joinLabel, false);
   }
