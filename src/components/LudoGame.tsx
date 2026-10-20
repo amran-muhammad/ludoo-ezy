@@ -261,6 +261,9 @@ export default function LudoGame({room: init}: Props) {
   const [rolling, setRolling] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [joinName, setJoinName] = useState('');
+  const [joinErr, setJoinErr] = useState('');
+  const [joining, setJoining] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>|null>(null);
   const code = init.code;
 
@@ -284,7 +287,7 @@ export default function LudoGame({room: init}: Props) {
   }, [code]);
 
   useEffect(() => {
-    const poll = isPlaying && (!isMyTurn || isWaiting);
+    const poll = isWaiting || (isPlaying && !isMyTurn);
     if (poll) pollRef.current = setInterval(fetch_, 2000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [isMyTurn, isWaiting, isPlaying, fetch_]);
@@ -303,6 +306,26 @@ export default function LudoGame({room: init}: Props) {
     setRolling(false);
     if (d.state) setState(d.state); else setError(d.message ?? 'Error rolling.');
     setBusy(false);
+  }
+
+  async function doJoin() {
+    const name = joinName.trim();
+    if (!name) { setJoinErr('Enter your name.'); return; }
+    setJoining(true); setJoinErr('');
+    const d = await post<{code?:string;color?:string;error?:string;message?:string}>(
+      `/site-api/ludo/rooms/${code}/join`, {name, playerId}
+    );
+    if (d.code) {
+      try { localStorage.setItem('ludo_player_id', playerId); } catch {}
+      await fetch_();
+    } else {
+      setJoinErr(
+        d.error === 'full' ? 'Room is full (4/4 players).' :
+        d.error === 'already_started' ? 'Game already started — you can only watch.' :
+        d.message ?? 'Could not join. Please try again.'
+      );
+    }
+    setJoining(false);
   }
 
   async function doMove(tokenId: number) {
@@ -512,12 +535,45 @@ export default function LudoGame({room: init}: Props) {
                 )}
 
                 {isWaiting && !myPlayer && (
-                  <p style={{fontSize:12, color:'rgba(255,255,255,0.5)', textAlign:'center'}}>
-                    Spectating · <a href="/" style={{color:'#90caf9'}}>Start your own game</a>
-                  </p>
+                  <div style={{display:'flex', flexDirection:'column', gap:10}}>
+                    <p style={{fontSize:12, color:'rgba(255,255,255,0.65)', lineHeight:1.5, margin:0}}>
+                      You received a shared link. Enter your name to join this game.
+                    </p>
+                    <input
+                      type="text" maxLength={30} placeholder="Your name"
+                      value={joinName} onChange={e => { setJoinName(e.target.value); setJoinErr(''); }}
+                      onKeyDown={e => e.key === 'Enter' && doJoin()}
+                      style={{
+                        background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.2)',
+                        borderRadius:8, padding:'10px 14px', color:'#fff', fontSize:14,
+                        outline:'none', width:'100%',
+                      }}
+                    />
+                    {joinErr && <p style={{fontSize:12, color:'#ef9a9a', margin:0}}>{joinErr}</p>}
+                    <button className="lg-btn lg-btn-start" onClick={doJoin}
+                      disabled={joining} aria-busy={joining}>
+                      {joining ? 'Joining…' : '→ Join game'}
+                    </button>
+                  </div>
                 )}
 
-                {isPlaying && (
+                {isPlaying && !myPlayer && (
+                  <div style={{display:'flex', flexDirection:'column', gap:10, alignItems:'center', padding:'8px 0'}}>
+                    <p style={{fontSize:13, color:'rgba(255,255,255,0.5)', textAlign:'center', margin:0, lineHeight:1.6}}>
+                      This game is already in progress.<br/>You are watching as a spectator.
+                    </p>
+                    <a href="/" style={{
+                      display:'block', textAlign:'center', width:'100%',
+                      background:'rgba(255,255,255,0.1)', borderRadius:10,
+                      padding:'10px 0', color:'#fff', fontSize:13, fontWeight:700,
+                      textDecoration:'none', border:'1px solid rgba(255,255,255,0.2)',
+                    }}>
+                      ＋ Start your own game
+                    </a>
+                  </div>
+                )}
+
+                {isPlaying && myPlayer && (
                   <div className="lg-dice-area">
                     <div style={{
                       padding:'16px 20px', borderRadius:12,
