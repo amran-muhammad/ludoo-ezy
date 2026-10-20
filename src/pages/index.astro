@@ -8,58 +8,78 @@ const {site} = await staticContext(Astro.request);
 ---
 
 <Base site={site} title={SITE.tagline} description={SITE.description} isStatic>
-  <div class="mx-auto max-w-5xl px-4 sm:px-6 py-16">
-    <div class="text-center mb-14">
-      <h1 class="text-5xl font-bold tracking-tight mb-4">{site?.name ?? 'Ludo'}</h1>
-      <p class="text-xl text-muted-foreground">{SITE.tagline}</p>
+  <div class="mx-auto max-w-5xl px-4 sm:px-6 py-10 sm:py-16">
+    <!-- Hero -->
+    <div class="text-center mb-10">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4 text-4xl">🎲</div>
+      <h1 class="text-4xl sm:text-5xl font-bold tracking-tight mb-3">{site?.name ?? 'Ludo'}</h1>
+      <p class="text-lg text-muted-foreground">{SITE.tagline}</p>
     </div>
 
-    <div class="grid gap-8 sm:grid-cols-2 max-w-2xl mx-auto">
+    <div class="grid gap-6 sm:grid-cols-2 max-w-2xl mx-auto">
       <!-- Create game -->
-      <div class="border rounded-xl p-8 flex flex-col gap-5 bg-card">
+      <div class="border rounded-2xl p-6 sm:p-8 flex flex-col gap-5 bg-card shadow-sm">
         <div>
           <h2 class="text-xl font-semibold mb-1">New game</h2>
-          <p class="text-sm text-muted-foreground">Create a room and share the link with up to 3 friends. Unfilled spots become bots.</p>
+          <p class="text-sm text-muted-foreground">Create a room and share the code. Empty spots fill with bots.</p>
         </div>
-        <form id="create-form" class="flex flex-col gap-3" novalidate>
+        <form id="create-form" class="flex flex-col gap-4" novalidate>
           <div class="flex flex-col gap-1">
             <label for="create-name" class="text-sm font-medium">Your name</label>
-            <input id="create-name" name="name" type="text" maxlength="30" autocomplete="off" required
+            <input id="create-name" name="name" type="text" maxlength="30" autocomplete="off"
               placeholder="e.g. Alice"
-              class="border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+              class="border rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
             <span id="create-name-error" class="text-xs text-destructive hidden" aria-live="polite"></span>
           </div>
+
+          <!-- Player mode -->
+          <div class="flex flex-col gap-2">
+            <span class="text-sm font-medium">Players</span>
+            <div class="grid grid-cols-3 gap-2" role="group" aria-label="Number of players">
+              {[2, 3, 4].map(n => (
+                <label class="mode-label cursor-pointer">
+                  <input type="radio" name="maxPlayers" value={n} class="sr-only"
+                    checked={n === 4} />
+                  <span class="mode-chip flex flex-col items-center gap-1 border rounded-xl p-3 text-center transition-all hover:border-primary">
+                    <span class="text-xl">{n === 2 ? '👥' : n === 3 ? '👨‍👩‍👦' : '🧑‍🤝‍🧑'}</span>
+                    <span class="text-sm font-semibold">{n} players</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <button type="submit" id="create-btn"
-            class="rounded-md bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-            <span id="create-label">Create game</span>
+            class="rounded-xl bg-primary text-primary-foreground px-4 py-3 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            <span id="create-label">🎲 Create game</span>
           </button>
         </form>
       </div>
 
       <!-- Join game -->
-      <div class="border rounded-xl p-8 flex flex-col gap-5 bg-card">
+      <div class="border rounded-2xl p-6 sm:p-8 flex flex-col gap-5 bg-card shadow-sm">
         <div>
           <h2 class="text-xl font-semibold mb-1">Join a game</h2>
-          <p class="text-sm text-muted-foreground">Got a room code from a friend? Enter it below to join their game.</p>
+          <p class="text-sm text-muted-foreground">Got a room code from a friend? Enter it below.</p>
         </div>
-        <form id="join-form" class="flex flex-col gap-3" novalidate>
+        <form id="join-form" class="flex flex-col gap-4" novalidate>
           <div class="flex flex-col gap-1">
             <label for="join-name" class="text-sm font-medium">Your name</label>
-            <input id="join-name" name="name" type="text" maxlength="30" autocomplete="off" required
+            <input id="join-name" name="name" type="text" maxlength="30" autocomplete="off"
               placeholder="e.g. Bob"
-              class="border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+              class="border rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
             <span id="join-name-error" class="text-xs text-destructive hidden" aria-live="polite"></span>
           </div>
           <div class="flex flex-col gap-1">
             <label for="join-code" class="text-sm font-medium">Room code</label>
-            <input id="join-code" name="code" type="text" maxlength="8" autocomplete="off" required
+            <input id="join-code" name="code" type="text" maxlength="8" autocomplete="off"
               placeholder="e.g. ABC123"
-              class="border rounded-md px-3 py-2 text-sm bg-background uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-ring" />
+              class="border rounded-lg px-3 py-2.5 text-sm bg-background uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-ring" />
             <span id="join-code-error" class="text-xs text-destructive hidden" aria-live="polite"></span>
           </div>
           <button type="submit" id="join-btn"
-            class="rounded-md bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-            <span id="join-label">Join game</span>
+            class="rounded-xl bg-primary text-primary-foreground px-4 py-3 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            <span id="join-label">→ Join game</span>
           </button>
         </form>
         <span id="join-error" class="text-sm text-destructive hidden" aria-live="polite"></span>
@@ -67,20 +87,28 @@ const {site} = await staticContext(Astro.request);
     </div>
 
     <!-- How to play -->
-    <section id="how-to-play" class="mt-20 max-w-2xl mx-auto">
+    <section class="mt-16 max-w-2xl mx-auto">
       <h2 class="text-2xl font-bold mb-6">How to play</h2>
       <ol class="flex flex-col gap-4 text-sm text-muted-foreground">
-        <li class="flex gap-3"><span class="font-bold text-foreground tabular-nums">1.</span><span>Create a game and share the link with friends. Wait for them to join — or press <strong class="text-foreground">Start</strong> at any time to fill empty spots with bots.</span></li>
-        <li class="flex gap-3"><span class="font-bold text-foreground tabular-nums">2.</span><span>On your turn, click <strong class="text-foreground">Roll</strong> to roll the dice. You need a 6 to bring a token out of home.</span></li>
-        <li class="flex gap-3"><span class="font-bold text-foreground tabular-nums">3.</span><span>Click the token you want to move. Land on an opponent's token to send them back to their home.</span></li>
-        <li class="flex gap-3"><span class="font-bold text-foreground tabular-nums">4.</span><span>Get all four of your tokens to the centre to win. Rolling a 6 earns you a bonus turn.</span></li>
+        <li class="flex gap-3"><span class="font-bold text-foreground tabular-nums">1.</span><span>Create a game, choose 2–4 players, share the code. Press <strong class="text-foreground">Start</strong> whenever you're ready — empty spots become bots.</span></li>
+        <li class="flex gap-3"><span class="font-bold text-foreground tabular-nums">2.</span><span>On your turn, tap <strong class="text-foreground">Roll dice</strong>. Roll a 6 to bring a token out of home base.</span></li>
+        <li class="flex gap-3"><span class="font-bold text-foreground tabular-nums">3.</span><span>Tap a glowing token to move it. Land on an opponent to send them back home.</span></li>
+        <li class="flex gap-3"><span class="font-bold text-foreground tabular-nums">4.</span><span>Get all four tokens to the centre first to win. Use the <strong class="text-foreground">💬 Chat</strong> to trash-talk along the way.</span></li>
       </ol>
     </section>
   </div>
 </Base>
 
+<style>
+  /* Mode chip active state */
+  input[type="radio"]:checked + .mode-chip {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary) / 0.08);
+    box-shadow: 0 0 0 2px hsl(var(--primary) / 0.3);
+  }
+</style>
+
 <script>
-// Player identity — random UUID stored in localStorage per browser.
 function getOrCreatePlayerId(): string {
   try {
     let id = localStorage.getItem('ludo_player_id');
@@ -99,7 +127,6 @@ function clearError(el: HTMLElement | null) {
   el.textContent = '';
   el.classList.add('hidden');
 }
-
 function setBusy(btn: HTMLButtonElement, label: HTMLElement | null, busy: boolean, text = 'Creating…') {
   btn.disabled = busy;
   btn.setAttribute('aria-busy', String(busy));
@@ -120,20 +147,23 @@ createForm.addEventListener('submit', async e => {
   clearError(nameError);
   if (!name) { showError(nameError, 'Enter your name.'); nameInput.focus(); return; }
 
+  const maxPlayersInput = createForm.querySelector<HTMLInputElement>('input[name="maxPlayers"]:checked');
+  const maxPlayers = maxPlayersInput ? parseInt(maxPlayersInput.value, 10) : 4;
+
   setBusy(createBtn, createLabel, true, 'Creating…');
   try {
     const res = await fetch('/site-api/ludo/rooms', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name, playerId: getOrCreatePlayerId()}),
+      body: JSON.stringify({name, playerId: getOrCreatePlayerId(), maxPlayers}),
     });
     let data: {code?: string; message?: string} = {};
-    try { data = await res.json(); } catch { /* server returned non-JSON */ }
+    try { data = await res.json(); } catch {}
     if (!res.ok || !data.code) {
       showError(nameError, data.message ?? (res.status === 503 ? 'Server is unavailable. Try again shortly.' : 'Something went wrong. Please try again.'));
       return;
     }
-    localStorage.setItem('ludo_name', name);
+    try { localStorage.setItem('ludo_name', name); } catch {}
     window.location.href = `/game/${data.code}`;
   } catch {
     showError(nameError, 'Could not connect. Check your internet and try again.');
@@ -163,9 +193,6 @@ joinForm.addEventListener('submit', e => {
   if (!code) { showError(codeError, 'Enter a room code.'); ok = false; }
   if (!ok) { if (!name) nameInput.focus(); else codeInput.focus(); return; }
 
-  // Redirect to the game page with the name in the URL.
-  // The game page is server-rendered (goes through Cloudflare Worker) and handles the join
-  // API call from within that context, avoiding Bot Integrity Check issues on static pages.
   try { localStorage.setItem('ludo_name', name); } catch {}
   setBusy(joinBtn, joinLabel, true, 'Joining…');
   window.location.href = `/game/${code}?name=${encodeURIComponent(name)}`;

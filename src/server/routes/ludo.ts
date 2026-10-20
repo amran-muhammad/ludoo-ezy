@@ -31,8 +31,10 @@ const createBody = validator('json', (value, c) => {
   const v = (value ?? {}) as Record<string, unknown>;
   const name = str(v.name, 30);
   const playerId = isUUID(v.playerId) ? v.playerId : null;
+  const maxPlayers = typeof v.maxPlayers === 'number' && v.maxPlayers >= 2 && v.maxPlayers <= 4
+    ? Math.round(v.maxPlayers) : 4;
   if (!name || !playerId) return c.json({error: 'bad_request', message: 'name and playerId required.'}, 400);
-  return {name, playerId};
+  return {name, playerId, maxPlayers};
 });
 
 const joinBody = validator('json', (value, c) => {
@@ -58,6 +60,14 @@ const moveBody = validator('json', (value, c) => {
   return {playerId, tokenId};
 });
 
+const chatBody = validator('json', (value, c) => {
+  const v = (value ?? {}) as Record<string, unknown>;
+  const playerId = isUUID(v.playerId) ? v.playerId : null;
+  const body = str(v.body, 200);
+  if (!playerId || !body) return c.json({error: 'bad_request', message: 'playerId and body required.'}, 400);
+  return {playerId, body};
+});
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 export const ludoRoutes = new Hono()
@@ -65,10 +75,10 @@ export const ludoRoutes = new Hono()
   // POST /site-api/ludo/rooms — create a room.
   .post('/rooms', createBody, withDb, async c => {
     const db = c.var.db!;
-    const {name, playerId} = c.req.valid('json');
+    const {name, playerId, maxPlayers} = c.req.valid('json');
     const color: Color = 'red';
     const code = randomCode();
-    const state = makeInitialState([{color, name, isBot: false, playerId}]);
+    const state = makeInitialState([{color, name, isBot: false, playerId}], maxPlayers);
     await db.ludoRoom.create({
       data: {code, state: JSON.stringify(state), status: 'waiting'},
     });
@@ -88,10 +98,6 @@ export const ludoRoutes = new Hono()
   })
 
   // GET /site-api/ludo/rooms/:code/join-redirect — fallback join via browser navigation.
-  // Used when the AJAX POST fails because Cloudflare's Bot Integrity Check intercepts it
-  // and returns an HTML challenge page instead of JSON. A navigation request (not XHR)
-  // triggers BIC properly: the browser solves the JS challenge, sets cf_clearance, and the
-  // Worker receives the actual request. On success or any error, redirects to /game/:code.
   .get('/rooms/:code/join-redirect', withDb, async c => {
     const code = c.req.param('code');
     const name = (c.req.query('name') ?? '').trim();
@@ -112,7 +118,8 @@ export const ludoRoutes = new Hono()
     if (state.status !== 'waiting') {
       return c.redirect(`${base}?joinError=already_started`);
     }
-    if (state.players.length >= 4) {
+    const maxPlayers = state.maxPlayers ?? 4;
+    if (state.players.length >= maxPlayers) {
       return c.redirect(`${base}?joinError=full&joinName=${encodeURIComponent(name)}`);
     }
     const used = new Set(state.players.map(p => p.color));
@@ -136,11 +143,11 @@ export const ludoRoutes = new Hono()
     try { state = JSON.parse(room.state); } catch {
       return c.json({error: 'corrupted', message: 'Room data is unavailable. Please try a different room.'}, 500);
     }
-    // Let returning players back in regardless of game status.
     const existing = state.players.find(p => p.playerId === playerId);
     if (existing) return c.json({code, color: existing.color});
     if (state.status !== 'waiting') return c.json({error: 'already_started', message: 'Game already started.'}, 409);
-    if (state.players.length >= 4) return c.json({error: 'full', message: 'Room is full.'}, 409);
+    const maxPlayers = state.maxPlayers ?? 4;
+    if (state.players.length >= maxPlayers) return c.json({error: 'full', message: 'Room is full.'}, 409);
     const used = new Set(state.players.map(p => p.color));
     const color = COLORS.find(col => !used.has(col));
     if (!color) return c.json({error: 'full', message: 'Room is full.'}, 409);
@@ -208,6 +215,41 @@ export const ludoRoutes = new Hono()
     const newStatus = state.status === 'finished' ? 'finished' : 'playing';
     await db.ludoRoom.update({where: {code}, data: {state: JSON.stringify(state), status: newStatus}});
     return c.json({state});
+  })
+
+  // GET /site-api/ludo/rooms/:code/messages — poll chat (returns last 50, or after a given id).
+  .get('/rooms/:code/messages', withDb, async c => {
+    const db = c.var.db!;
+    const code = c.req.param('code');
+    const afterParam = c.req.query('after');
+    const after = afterParam ? parseInt(afterParam, 10) : undefined;
+    const msgs = await db.ludoMessage.findMany({
+      where: {roomCode: code, ...(after ? {id: {gt: after}} : {})},
+      orderBy: {id: 'asc'},
+      take: 50,
+      select: {id: true, playerName: true, color: true, body: true, createdAt: true},
+    });
+    return c.json({messages: msgs});
+  })
+
+  // POST /site-api/ludo/rooms/:code/messages — send a chat message.
+  .post('/rooms/:code/messages', chatBody, withDb, async c => {
+    const db = c.var.db!;
+    const code = c.req.param('code');
+    const {playerId, body} = c.req.valid('json');
+    const room = await db.ludoRoom.findUnique({where: {code}, select: {state: true}});
+    if (!room) return c.json({error: 'not_found', message: 'Room not found.'}, 404);
+    let state: GameState;
+    try { state = JSON.parse(room.state); } catch {
+      return c.json({error: 'corrupted'}, 500);
+    }
+    const player = state.players.find(p => p.playerId === playerId);
+    if (!player) return c.json({error: 'not_in_room', message: 'You are not in this room.'}, 403);
+    const msg = await db.ludoMessage.create({
+      data: {roomCode: code, playerName: player.name, color: player.color, body},
+      select: {id: true, playerName: true, color: true, body: true, createdAt: true},
+    });
+    return c.json({message: msg}, 201);
   });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

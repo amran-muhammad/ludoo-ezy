@@ -34,6 +34,7 @@ export interface GameState {
   diceRolled: boolean;
   consecutiveSixes: number; // 3 sixes in a row = forfeit turn
   status: 'waiting' | 'playing' | 'finished';
+  maxPlayers: number; // 2 | 3 | 4 — total player slots (humans + bots)
   updatedAt: string; // ISO
 }
 
@@ -270,7 +271,10 @@ function makeTokens(): Token[] {
   return [0, 1, 2, 3].map(id => ({id, pos: -1}));
 }
 
-export function makeInitialState(players: Array<{color: Color; name: string; isBot: boolean; playerId: string}>): GameState {
+export function makeInitialState(
+  players: Array<{color: Color; name: string; isBot: boolean; playerId: string}>,
+  maxPlayers: number = 4,
+): GameState {
   return {
     players: players.map(p => ({...p, tokens: makeTokens(), rank: null})),
     turn: 0,
@@ -278,6 +282,7 @@ export function makeInitialState(players: Array<{color: Color; name: string; isB
     diceRolled: false,
     consecutiveSixes: 0,
     status: 'waiting',
+    maxPlayers: Math.max(2, Math.min(4, maxPlayers)),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -286,12 +291,14 @@ export function startGame(state: GameState): GameState {
   return {...state, status: 'playing', updatedAt: new Date().toISOString()};
 }
 
-// Fill remaining player slots with bots.
+// Fill remaining player slots with bots up to state.maxPlayers.
 export function fillWithBots(state: GameState): GameState {
   const s = structuredClone(state) as GameState;
+  const max = s.maxPlayers ?? 4;
   const used = new Set(s.players.map(p => p.color));
   let bi = 1;
   for (const color of COLORS) {
+    if (s.players.length >= max) break;
     if (used.has(color)) continue;
     s.players.push({
       color,

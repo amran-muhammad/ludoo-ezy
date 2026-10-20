@@ -88,3 +88,16 @@ model LudoRoom {
   @@index([status, updatedAt])
   @@map("ludo_rooms")
 }
+
+/// A chat message sent inside a Ludo game room.
+model LudoMessage {
+  id         Int      @id @default(autoincrement())
+  roomCode   String   @map("room_code") @db.VarChar(8)
+  playerName String   @map("player_name") @db.VarChar(30)
+  color      String   @db.VarChar(10)
+  body       String   @db.VarChar(200)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([roomCode, id])
+  @@map("ludo_messages")
+}
