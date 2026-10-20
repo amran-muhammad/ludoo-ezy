@@ -42,21 +42,17 @@ export interface GameState {
 // 52-square main path as [row, col] on a 15×15 grid.
 // Position 0 = Red's entry (safe), going clockwise.
 // Offsets for each color: Red=0, Green=13, Yellow=26, Blue=39
+// 52-square main path, clockwise, starting at Red's entry (pos 0).
+// Entries: Red=0, Green=13, Yellow=26, Blue=39. 13 squares per section.
 export const MAIN_PATH: [number, number][] = [
-  [13,6],[12,6],[11,6],[10,6],[9,6],[8,6],   // 0-5  up (Red entry=0)
-  [8,5],[8,4],[8,3],[8,2],[8,1],[8,0],        // 6-11 left
-  [7,0],[6,0],                                // 12-13 (Green entry=13)
-  [6,1],[6,2],[6,3],[6,4],[6,5],[6,6],        // 14-19 right
-  [5,6],[4,6],[3,6],[2,6],[1,6],[0,6],        // 20-25 up
-  [0,7],                                      // 26 (Yellow entry=26)
-  [0,8],[1,8],[2,8],[3,8],[4,8],[5,8],        // 27-32 down
-  [6,8],[6,9],[6,10],[6,11],[6,12],[6,13],[6,14], // 33-39 (Blue entry=39)
-  [7,14],[8,14],                              // 40-41 right+down
-  [8,13],[8,12],[8,11],[8,10],[8,9],[8,8],    // 42-47 left
-  [9,8],[10,8],[11,8],[12,8],[13,8],[14,8],   // 48-53 down
-  [14,7],                                     // 54
-  [14,6],                                     // 55
-  [13,6],                                     // 56 — wraps back near Red
+  // Section 1: Red→Green (pos 0-12, Green entry at 13)
+  [13,6],[12,6],[11,6],[10,6],[9,6],[8,6],[8,5],[8,4],[8,3],[8,2],[8,1],[8,0],[7,0],
+  // Section 2: Green→Yellow (pos 13-25, Yellow entry at 26)
+  [6,0],[6,1],[6,2],[6,3],[6,4],[6,5],[6,6],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],
+  // Section 3: Yellow→Blue (pos 26-38, Blue entry at 39)
+  [0,7],[0,8],[1,8],[2,8],[3,8],[4,8],[5,8],[6,8],[6,9],[6,10],[6,11],[6,12],[6,13],
+  // Section 4: Blue→Red (pos 39-51)
+  [6,14],[7,14],[8,14],[8,13],[8,12],[8,11],[8,10],[8,9],[8,8],[9,8],[10,8],[11,8],[12,8],
 ];
 
 // Home columns: 6 squares from entry toward center col/row 7.
@@ -80,8 +76,9 @@ export const COLOR_OFFSET: Record<Color, number> = {
   red: 0, green: 13, yellow: 26, blue: 39,
 };
 
-// Safe squares (absolute main-path indices) — can't be captured here.
-const SAFE_ABS = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
+// Safe squares (absolute main-path indices 0-51) — can't be captured here.
+// Entries (0,13,26,39) + midpoints (8,21,34,47).
+export const SAFE_ABS = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
 
 // Convert a color-relative position (0-51) to an absolute board index (0-51).
 function absPos(color: Color, relPos: number): number {
