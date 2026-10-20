@@ -341,7 +341,7 @@ export default function LudoGame({room: init}: Props) {
   }
 
   async function doJoin(forName?: string) {
-    const name = (forName ?? joinName).trim();
+    const name = (typeof forName === 'string' ? forName : joinName).trim();
     if (!name) { setJoinErr('Enter your name.'); return; }
     setJoining(true); setJoinErr('');
     try {
@@ -597,7 +597,7 @@ export default function LudoGame({room: init}: Props) {
                       }}
                     />
                     {joinErr && <p style={{fontSize:12, color:'#ef9a9a', margin:0}}>{joinErr}</p>}
-                    <button className="lg-btn lg-btn-start" onClick={doJoin}
+                    <button className="lg-btn lg-btn-start" onClick={() => doJoin()}
                       disabled={joining} aria-busy={joining}>
                       {joining ? 'Joining…' : '→ Join game'}
                     </button>
