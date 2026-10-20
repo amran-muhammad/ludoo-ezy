@@ -187,7 +187,7 @@ export const ludoRoutes = new Hono()
     if (state.diceRolled) return c.json({error: 'already_rolled'}, 409);
     state = rollDice(state);
     if (state.diceRolled && state.dice !== null) {
-      const movable = movableTokens(state.players[state.turn], state.dice);
+      const movable = movableTokens(state, state.players[state.turn], state.dice);
       if (movable.length === 1) state = applyMove(state, movable[0]);
     }
     state = await playBotTurns(state, db, code);
@@ -208,7 +208,7 @@ export const ludoRoutes = new Hono()
     const current = state.players[state.turn];
     if (current.playerId !== playerId) return c.json({error: 'not_your_turn'}, 409);
     if (!state.diceRolled || state.dice === null) return c.json({error: 'roll_first'}, 409);
-    const movable = movableTokens(current, state.dice);
+    const movable = movableTokens(state, current, state.dice);
     if (!movable.includes(tokenId)) return c.json({error: 'invalid_move', message: 'Cannot move that token.'}, 400);
     state = applyMove(state, tokenId);
     state = await playBotTurns(state, db, code);
@@ -265,7 +265,7 @@ async function playBotTurns(state: GameState, _db: unknown, _code: string): Prom
   while (s.status === 'playing' && s.players[s.turn].isBot && i++ < 20) {
     s = rollDice(s);
     if (s.diceRolled && s.dice !== null) {
-      const movable = movableTokens(s.players[s.turn], s.dice);
+      const movable = movableTokens(s, s.players[s.turn], s.dice);
       if (movable.length > 0) s = applyMove(s, botChooseToken(s));
     }
   }

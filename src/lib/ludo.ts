@@ -1,4 +1,6 @@
 // Ludo game logic — pure functions, no I/O.
+// Rules: Bangladeshi standard — need 6 to enter, bonus turn on 6, bonus turn on kill,
+// 3 consecutive sixes = forfeit, blocking (2+ same-color on one square = unlandable).
 
 export type Color = 'red' | 'green' | 'yellow' | 'blue';
 export const COLORS: Color[] = ['red', 'green', 'yellow', 'blue'];
@@ -35,6 +37,9 @@ export interface GameState {
   consecutiveSixes: number; // 3 sixes in a row = forfeit turn
   status: 'waiting' | 'playing' | 'finished';
   maxPlayers: number; // 2 | 3 | 4 — total player slots (humans + bots)
+  // Last notable event, set after each roll/move for UI toasts.
+  // Format: 'three_sixes' | 'no_moves' | 'cut:Name' | 'finished:Name' | 'extra_six' | 'extra_kill'
+  lastEvent?: string;
   updatedAt: string; // ISO
 }
 
@@ -43,8 +48,6 @@ export interface GameState {
 // 52-square main path as [row, col] on a 15×15 grid.
 // Position 0 = Red's entry (safe), going clockwise.
 // Offsets for each color: Red=0, Green=13, Yellow=26, Blue=39
-// 52-square main path, clockwise, starting at Red's entry (pos 0).
-// Entries: Red=0, Green=13, Yellow=26, Blue=39. 13 squares per section.
 export const MAIN_PATH: [number, number][] = [
   // Section 1: Red→Green (pos 0-12, Green entry at 13)
   [13,6],[12,6],[11,6],[10,6],[9,6],[8,6],[8,5],[8,4],[8,3],[8,2],[8,1],[8,0],[7,0],
@@ -88,34 +91,56 @@ function absPos(color: Color, relPos: number): number {
 
 // Get the [row,col] for a token given its color + position.
 export function cellOf(color: Color, pos: TokenPos): [number, number] | null {
-  if (pos === -1) return null; // in home base — use HOME_BASE slot
+  if (pos === -1) return null;
   if (pos <= 51) return MAIN_PATH[absPos(color, pos)];
   if (pos <= 57) return HOME_COLS[color][pos - 52];
-  return null; // finished
+  return null;
 }
 
-// Is a given absolute main-path square safe for `color` at `relPos`?
 function isSafe(color: Color, relPos: number): boolean {
   return SAFE_ABS.has(absPos(color, relPos));
+}
+
+// ── Blocking ────────────────────────────────────────────────────────────────
+
+// A square is "blocked" for `movingColor` if any opponent has 2+ tokens there.
+// Blocked squares cannot be landed on (Bangladeshi rule).
+function isBlockedFor(state: GameState, movingColor: Color, relPos: number): boolean {
+  if (relPos < 0 || relPos > 51) return false; // home column / finished — never blocked
+  if (isSafe(movingColor, relPos)) return false;  // safe squares are never blocked
+  const absLand = absPos(movingColor, relPos);
+  for (const other of state.players) {
+    if (other.color === movingColor) continue;
+    const count = other.tokens.filter(
+      ot => ot.pos >= 0 && ot.pos <= 51 && absPos(other.color, ot.pos) === absLand
+    ).length;
+    if (count >= 2) return true;
+  }
+  return false;
 }
 
 // ── Move validation ─────────────────────────────────────────────────────────
 
 // Returns the new position after moving `die` steps, or null if not valid.
 export function newPos(pos: TokenPos, die: DiceValue): TokenPos | null {
-  if (pos === 58) return null; // already finished
-  if (pos === -1) {
-    return die === 6 ? 0 : null; // enter only on 6
-  }
+  if (pos === 58) return null;          // already finished
+  if (pos === -1) return die === 6 ? 0 : null; // enter only on 6
   const next = pos + die;
-  if (next > 58) return null; // overshot home
+  if (next > 58) return null;           // overshot home
   return next;
 }
 
-// Returns which token IDs the current player can move with `die`.
-export function movableTokens(player: Player, die: DiceValue): number[] {
+// Returns which token IDs the current player can legally move with `die`.
+// Enforces the blocking rule: can't land on a square with 2+ opponent tokens.
+export function movableTokens(state: GameState, player: Player, die: DiceValue): number[] {
   return player.tokens
-    .filter(t => newPos(t.pos, die) !== null)
+    .filter(t => {
+      const np = newPos(t.pos, die);
+      if (np === null) return false;
+      // Blocking: can't land on opponent's double-stack on a non-safe square
+      if (isBlockedFor(state, player.color, np)) return false;
+      return true;
+    })
     .map(t => t.id);
 }
 
@@ -126,38 +151,44 @@ export function applyMove(state: GameState, tokenId: number): GameState {
   const player = s.players[s.turn];
   const die = s.dice!;
   const token = player.tokens.find(t => t.id === tokenId)!;
-  const oldPos = token.pos;
-  const next = newPos(oldPos, die)!;
+  const next = newPos(token.pos, die)!;
   token.pos = next;
 
-  // Capture: if landing on main path (not safe), send opponent tokens home.
-  if (next >= 0 && next <= 51) {
+  // Capture: land on non-safe main-path square → send ALL opponent tokens there home.
+  // A single token can be captured (not a double-stack, which is a block and can't be landed on anyway).
+  let actualKill = false;
+  let killedNames: string[] = [];
+  if (next >= 0 && next <= 51 && !isSafe(player.color, next)) {
     const absLand = absPos(player.color, next);
-    if (!isSafe(player.color, next)) {
-      for (const other of s.players) {
-        if (other.color === player.color) continue;
-        for (const ot of other.tokens) {
-          if (ot.pos >= 0 && ot.pos <= 51) {
-            if (absPos(other.color, ot.pos) === absLand) {
-              ot.pos = -1; // send home
-            }
-          }
+    for (const other of s.players) {
+      if (other.color === player.color) continue;
+      for (const ot of other.tokens) {
+        if (ot.pos >= 0 && ot.pos <= 51 && absPos(other.color, ot.pos) === absLand) {
+          ot.pos = -1; // send home
+          actualKill = true;
+          if (!killedNames.includes(other.name)) killedNames.push(other.name);
         }
       }
     }
   }
 
-  // Check if player finished.
+  // Check if this player finished.
   const done = player.tokens.every(t => t.pos === 58);
   if (done) {
     const ranks = s.players.map(p => p.rank).filter(r => r !== null) as number[];
-    player.rank = (ranks.length === 0 ? 1 : Math.max(...ranks) + 1);
+    player.rank = ranks.length === 0 ? 1 : Math.max(...ranks) + 1;
+    s.lastEvent = `finished:${player.name}`;
+  } else if (actualKill) {
+    s.lastEvent = `cut:${killedNames.join(',')}`;
+  } else if (die === 6) {
+    s.lastEvent = 'extra_six';
+  } else {
+    s.lastEvent = undefined;
   }
 
-  // Check overall finish.
+  // Check overall game finish (≤1 active player left).
   const activePlayers = s.players.filter(p => p.tokens.some(t => t.pos !== 58));
   if (activePlayers.length <= 1) {
-    // Assign last rank to remaining player.
     for (const p of s.players) {
       if (p.rank === null) {
         const ranks = s.players.map(q => q.rank).filter(r => r !== null) as number[];
@@ -167,15 +198,18 @@ export function applyMove(state: GameState, tokenId: number): GameState {
     s.status = 'finished';
   }
 
-  // Extra turn on 6 or on capture (token sent home is a capture if from main path).
-  const captured = next >= 0 && next <= 51 && !isSafe(player.color, next);
-  const extraTurn = die === 6 || (captured && next !== 0);
+  // Bangladeshi extra-turn rules:
+  //   • Rolling a 6 → bonus roll
+  //   • Killing an opponent token → bonus roll
+  // Both can stack: roll 6 AND kill → still just one bonus roll, and consecutiveSixes keeps counting.
+  const extraTurn = die === 6 || actualKill;
 
   if (!s.players.every(p => p.rank !== null)) {
     if (!extraTurn) {
-      // Advance to next active player.
+      // Advance to the next active (unfinished) player.
       let next_turn = (s.turn + 1) % s.players.length;
-      while (s.players[next_turn].tokens.every(t => t.pos === 58)) {
+      let guard = 0;
+      while (s.players[next_turn].tokens.every(t => t.pos === 58) && guard++ < s.players.length) {
         next_turn = (next_turn + 1) % s.players.length;
       }
       s.turn = next_turn;
@@ -184,7 +218,9 @@ export function applyMove(state: GameState, tokenId: number): GameState {
 
   s.dice = null;
   s.diceRolled = false;
-  s.consecutiveSixes = extraTurn && die === 6 ? s.consecutiveSixes : 0;
+  // Keep consecutiveSixes count only when the bonus came from rolling 6 itself.
+  // If extra turn came from a kill only (die !== 6), reset the streak.
+  s.consecutiveSixes = (extraTurn && die === 6) ? s.consecutiveSixes : 0;
   s.updatedAt = new Date().toISOString();
   return s;
 }
@@ -196,15 +232,23 @@ export function rollDice(state: GameState): GameState {
   const die = (Math.floor(Math.random() * 6) + 1) as DiceValue;
   s.dice = die;
   s.diceRolled = true;
+  s.lastEvent = undefined;
 
   if (die === 6) {
     s.consecutiveSixes++;
     if (s.consecutiveSixes >= 3) {
-      // Forfeit: 3 sixes in a row.
+      // Three sixes in a row — forfeit turn, nothing moves.
       s.consecutiveSixes = 0;
       s.dice = null;
       s.diceRolled = false;
-      s.turn = (s.turn + 1) % s.players.length;
+      s.lastEvent = 'three_sixes';
+      // Advance to next active player.
+      let next = (s.turn + 1) % s.players.length;
+      let guard = 0;
+      while (s.players[next].tokens.every(t => t.pos === 58) && guard++ < s.players.length) {
+        next = (next + 1) % s.players.length;
+      }
+      s.turn = next;
       s.updatedAt = new Date().toISOString();
       return s;
     }
@@ -212,14 +256,16 @@ export function rollDice(state: GameState): GameState {
     s.consecutiveSixes = 0;
   }
 
-  // Auto-move if only one token can move.
-  const movable = movableTokens(s.players[s.turn], die);
+  // Check if the current player has any legal move.
+  const movable = movableTokens(s, s.players[s.turn], die);
   if (movable.length === 0) {
-    // No valid move — advance turn.
+    // No valid move (including blocked squares) — pass turn.
     s.dice = null;
     s.diceRolled = false;
+    s.lastEvent = 'no_moves';
     let next = (s.turn + 1) % s.players.length;
-    while (s.players[next].tokens.every(t => t.pos === 58)) {
+    let guard = 0;
+    while (s.players[next].tokens.every(t => t.pos === 58) && guard++ < s.players.length) {
       next = (next + 1) % s.players.length;
     }
     s.turn = next;
@@ -231,33 +277,35 @@ export function rollDice(state: GameState): GameState {
 
 // ── Bot logic ────────────────────────────────────────────────────────────────
 
-// Simple bot: prefers capture > entering home column > advancing furthest token.
+// Strategy: kill > enter new token on 6 > advance furthest token.
 export function botChooseToken(state: GameState): number {
   const player = state.players[state.turn];
   const die = state.dice!;
-  const movable = movableTokens(player, die);
+  const movable = movableTokens(state, player, die);
 
-  // Prefer token that would capture.
+  // Prefer a token that would kill an opponent.
   for (const id of movable) {
     const t = player.tokens.find(x => x.id === id)!;
     const np = newPos(t.pos, die)!;
     if (np >= 0 && np <= 51 && !isSafe(player.color, np)) {
       const absLand = absPos(player.color, np);
-      const captures = state.players.some(other => {
+      const kills = state.players.some(other => {
         if (other.color === player.color) return false;
-        return other.tokens.some(ot => ot.pos >= 0 && ot.pos <= 51 && absPos(other.color, ot.pos) === absLand);
+        return other.tokens.some(
+          ot => ot.pos >= 0 && ot.pos <= 51 && absPos(other.color, ot.pos) === absLand
+        );
       });
-      if (captures) return id;
+      if (kills) return id;
     }
   }
 
-  // Prefer token entering from home on a 6.
+  // On a 6, prefer entering a new token from home.
   if (die === 6) {
     const atHome = movable.find(id => player.tokens.find(x => x.id === id)!.pos === -1);
     if (atHome !== undefined) return atHome;
   }
 
-  // Prefer token furthest along (highest pos).
+  // Advance the token that is furthest along.
   return movable.reduce((best, id) => {
     const bp = player.tokens.find(x => x.id === best)!.pos;
     const cp = player.tokens.find(x => x.id === id)!.pos;
@@ -300,14 +348,7 @@ export function fillWithBots(state: GameState): GameState {
   for (const color of COLORS) {
     if (s.players.length >= max) break;
     if (used.has(color)) continue;
-    s.players.push({
-      color,
-      name: `Bot ${bi++}`,
-      isBot: true,
-      playerId: '',
-      tokens: makeTokens(),
-      rank: null,
-    });
+    s.players.push({color, name: `Bot ${bi++}`, isBot: true, playerId: '', tokens: makeTokens(), rank: null});
   }
   return s;
 }

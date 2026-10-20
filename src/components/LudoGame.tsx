@@ -450,6 +450,8 @@ export default function LudoGame({room: init}: Props) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
   const [joinName, setJoinName] = useState(() => {
     try { return new URLSearchParams(window.location.search).get('name')?.trim() ?? ''; } catch { return ''; }
   });
@@ -478,7 +480,7 @@ export default function LudoGame({room: init}: Props) {
   const isMyTurn  = myPlayer !== null && state.players[state.turn]?.color === myColor;
   const curPlayer = state.players[state.turn];
   const movable   = (isMyTurn && state.diceRolled && state.dice !== null)
-    ? movableTokens(myPlayer!, state.dice) : [];
+    ? movableTokens(state, myPlayer!, state.dice) : [];
 
   const isWaiting  = state.status === 'waiting';
   const isPlaying  = state.status === 'playing';
@@ -491,12 +493,33 @@ export default function LudoGame({room: init}: Props) {
   // Dice face value: always show last rolled number
   const diceVal: DiceValue|null = state.dice ?? lastDiceRef.current;
 
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 3200);
+  }, []);
+
+  const lastEventRef = useRef<string|undefined>(undefined);
+  const applyGameState = useCallback((s: GameState) => {
+    setState(s);
+    if (s.lastEvent && s.lastEvent !== lastEventRef.current) {
+      lastEventRef.current = s.lastEvent;
+      const ev = s.lastEvent;
+      if (ev === 'three_sixes') showToast('🚫 Three 6s! Turn forfeited.');
+      else if (ev === 'no_moves') showToast('⏭️ No valid moves — turn passed.');
+      else if (ev.startsWith('cut:')) showToast(`✂️ Cut! ${ev.slice(4)} sent home.`);
+      else if (ev.startsWith('finished:')) showToast(`🏆 ${ev.slice(9)} finished!`);
+      else if (ev === 'extra_six') showToast('🎲 Six! Roll again.');
+      else if (ev === 'extra_kill') showToast('⚔️ Kill! Roll again.');
+    }
+  }, [showToast]);
+
   const fetchState = useCallback(async () => {
     try {
       const d: {room:{state:GameState}} = await fetch(`/site-api/ludo/rooms/${code}`).then(r=>r.json());
-      if (d?.room?.state) setState(d.room.state);
+      if (d?.room?.state) applyGameState(d.room.state);
     } catch { /* ignore */ }
-  }, [code]);
+  }, [code, applyGameState]);
 
   useEffect(() => {
     const needsPoll = isWaiting || (isPlaying && !isMyTurn);
@@ -530,7 +553,7 @@ export default function LudoGame({room: init}: Props) {
     setRolling(false);
     if (d.state) {
       if (d.state.dice !== null) lastDiceRef.current = d.state.dice;
-      setState(d.state);
+      applyGameState(d.state);
     } else {
       setError(d.message ?? 'Error rolling dice.');
     }
@@ -569,7 +592,7 @@ export default function LudoGame({room: init}: Props) {
     if (!isMyTurn || !state.diceRolled || busy) return;
     setBusy(true); setError('');
     const d = await apiPost<{state?:GameState;message?:string}>(`/site-api/ludo/rooms/${code}/move`, {playerId, tokenId});
-    if (d.state) setState(d.state); else setError(d.message ?? 'Error moving.');
+    if (d.state) applyGameState(d.state); else setError(d.message ?? 'Error moving.');
     setBusy(false);
   }
 
@@ -764,9 +787,22 @@ export default function LudoGame({room: init}: Props) {
           0%,100% { transform: scale(1) }
           40%     { transform: scale(1.06) }
         }
+        .lg-toast {
+          position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+          background: rgba(20,20,30,0.92); color: #fff;
+          border: 1px solid rgba(255,255,255,0.18); border-radius: 24px;
+          padding: 10px 22px; font-size: 15px; font-weight: 600;
+          white-space: nowrap; z-index: 9999;
+          animation: lgToastIn 0.22s ease;
+          backdrop-filter: blur(8px);
+          box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+          pointer-events: none;
+        }
+        @keyframes lgToastIn { from { opacity:0; transform:translateX(-50%) translateY(12px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
       `}</style>
 
       <div className="lg">
+        {toast && <div className="lg-toast">{toast}</div>}
 
         {/* ── Top bar ── */}
         <div className="lg-bar">
