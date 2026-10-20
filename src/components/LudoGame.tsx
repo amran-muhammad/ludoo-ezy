@@ -261,10 +261,14 @@ export default function LudoGame({room: init}: Props) {
   const [rolling, setRolling] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [joinName, setJoinName] = useState('');
+  const [joinName, setJoinName] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('name')?.trim() ?? ''; }
+    catch { return ''; }
+  });
   const [joinErr, setJoinErr] = useState('');
   const [joining, setJoining] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>|null>(null);
+  const autoJoined = useRef(false);
   const code = init.code;
 
   const myPlayer  = state.players.find(p => p.playerId === playerId) ?? null;
@@ -292,6 +296,19 @@ export default function LudoGame({room: init}: Props) {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [isMyTurn, isWaiting, isPlaying, fetch_]);
 
+  // Auto-join when redirected from homepage with ?name= param and room is still waiting.
+  useEffect(() => {
+    if (autoJoined.current || myPlayer || !isWaiting) return;
+    let urlName = '';
+    try { urlName = new URLSearchParams(window.location.search).get('name')?.trim() ?? ''; } catch {}
+    if (!urlName) return;
+    autoJoined.current = true;
+    try { history.replaceState({}, '', window.location.pathname); } catch {}
+    doJoin(urlName);
+  // doJoin is stable within a render; deps cover the join eligibility condition.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWaiting, myPlayer]);
+
   async function doStart() {
     setBusy(true); setError('');
     const d = await post<{ok?:boolean;message?:string}>(`/site-api/ludo/rooms/${code}/start`, {playerId});
@@ -308,8 +325,8 @@ export default function LudoGame({room: init}: Props) {
     setBusy(false);
   }
 
-  async function doJoin() {
-    const name = joinName.trim();
+  async function doJoin(forName?: string) {
+    const name = (forName ?? joinName).trim();
     if (!name) { setJoinErr('Enter your name.'); return; }
     setJoining(true); setJoinErr('');
     try {

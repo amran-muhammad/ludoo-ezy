@@ -148,14 +148,13 @@ const joinBtn = document.getElementById('join-btn') as HTMLButtonElement;
 const joinLabel = document.getElementById('join-label') as HTMLElement;
 joinBtn.dataset.default = joinLabel.textContent!;
 
-joinForm.addEventListener('submit', async e => {
+joinForm.addEventListener('submit', e => {
   e.preventDefault();
   const nameInput = joinForm.querySelector<HTMLInputElement>('#join-name')!;
   const codeInput = joinForm.querySelector<HTMLInputElement>('#join-code')!;
   const nameError = document.getElementById('join-name-error');
   const codeError = document.getElementById('join-code-error');
-  const joinError = document.getElementById('join-error');
-  clearError(nameError); clearError(codeError); clearError(joinError);
+  clearError(nameError); clearError(codeError);
 
   const name = nameInput.value.trim();
   const code = codeInput.value.trim().toUpperCase();
@@ -164,30 +163,11 @@ joinForm.addEventListener('submit', async e => {
   if (!code) { showError(codeError, 'Enter a room code.'); ok = false; }
   if (!ok) { if (!name) nameInput.focus(); else codeInput.focus(); return; }
 
+  // Redirect to the game page with the name in the URL.
+  // The game page is server-rendered (goes through Cloudflare Worker) and handles the join
+  // API call from within that context, avoiding Bot Integrity Check issues on static pages.
+  try { localStorage.setItem('ludo_name', name); } catch {}
   setBusy(joinBtn, joinLabel, true, 'Joining…');
-  try {
-    const res = await fetch(`/site-api/ludo/rooms/${code}/join`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name, playerId: getOrCreatePlayerId()}),
-    });
-    let data: {code?: string; message?: string; error?: string} = {};
-    try { data = await res.json(); } catch { /* server returned non-JSON (e.g. gateway HTML) */ }
-    if (!res.ok) {
-      if (data.error === 'not_found') showError(codeError, 'Room not found. Check the code and try again.');
-      else if (data.error === 'full') showError(joinError, 'That room is already full (4/4 players).');
-      else if (data.error === 'already_started') showError(joinError, 'That game has already started.');
-      else if (res.status === 503) showError(joinError, 'Server is unavailable right now. Please try again shortly.');
-      else if (res.status === 403) showError(joinError, 'Request blocked. Please refresh the page and try again.');
-      else showError(joinError, data.message ?? 'Something went wrong. Please try again.');
-      return;
-    }
-    localStorage.setItem('ludo_name', name);
-    window.location.href = `/game/${data.code ?? code}`;
-  } catch {
-    showError(joinError, 'Could not connect to the server. Check your internet connection and try again.');
-  } finally {
-    setBusy(joinBtn, joinLabel, false);
-  }
+  window.location.href = `/game/${code}?name=${encodeURIComponent(name)}`;
 });
 </script>
